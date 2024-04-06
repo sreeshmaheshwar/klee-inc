@@ -387,7 +387,7 @@ bool Z3SolverImpl::internalRunSolverIncremental(
       if (implication) {
         Z3_solver_assert(builder->ctx, z3Solver, implication.value());
       } else {
-        klee_warning("Using existing assumption literal - constant array");
+        // klee_warning("Using existing assumption literal - constant array");
       }
     }
   }
