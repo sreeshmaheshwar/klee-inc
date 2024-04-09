@@ -79,8 +79,6 @@ namespace klee {
       assert(false && "Fork not implemented!");
     }
 
-    virtual 
-
     /// evaluate - Determine for a particular state if the query
     /// expression is provably true, provably false or neither.
     ///
