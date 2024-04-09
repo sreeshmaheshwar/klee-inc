@@ -406,7 +406,7 @@ void SpecialFunctionHandler::handleMemalign(ExecutionState &state,
   }
 
   std::pair<ref<Expr>, ref<Expr>> alignmentRangeExpr =
-      executor.solver->getRange(state.constraints, arguments[0],
+      state.solver->getRange(state.constraints, arguments[0],
                                 state.queryMetaData);
   ref<Expr> alignmentExpr = alignmentRangeExpr.first;
   auto alignmentConstExpr = dyn_cast<ConstantExpr>(alignmentExpr);
@@ -477,7 +477,7 @@ void SpecialFunctionHandler::handleAssume(ExecutionState &state,
     e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
   
   bool res;
-  bool success __attribute__((unused)) = executor.solver->mustBeFalse(
+  bool success __attribute__((unused)) = state.solver->mustBeFalse(
       state.constraints, e, res, state.queryMetaData);
   assert(success && "FIXME: Unhandled solver failure");
   if (res) {
@@ -580,11 +580,11 @@ void SpecialFunctionHandler::handlePrintRange(ExecutionState &state,
   if (!isa<ConstantExpr>(arguments[1])) {
     // FIXME: Pull into a unique value method?
     ref<ConstantExpr> value;
-    bool success __attribute__((unused)) = executor.solver->getValue(
+    bool success __attribute__((unused)) = state.solver->getValue(
         state.constraints, arguments[1], value, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     bool res;
-    success = executor.solver->mustBeTrue(state.constraints,
+    success = state.solver->mustBeTrue(state.constraints,
                                           EqExpr::create(arguments[1], value),
                                           res, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
@@ -592,7 +592,7 @@ void SpecialFunctionHandler::handlePrintRange(ExecutionState &state,
       llvm::errs() << " == " << value;
     } else { 
       llvm::errs() << " ~= " << value;
-      std::pair<ref<Expr>, ref<Expr>> res = executor.solver->getRange(
+      std::pair<ref<Expr>, ref<Expr>> res = state.solver->getRange(
           state.constraints, arguments[1], state.queryMetaData);
       llvm::errs() << " (in [" << res.first << ", " << res.second <<"])";
     }
@@ -808,7 +808,7 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
 
     // FIXME: Type coercion should be done consistently somewhere.
     bool res;
-    bool success __attribute__((unused)) = executor.solver->mustBeTrue(
+    bool success __attribute__((unused)) = s->solver->mustBeTrue(
         s->constraints,
         EqExpr::create(
             ZExtExpr::create(arguments[1], Context::get().getPointerWidth()),

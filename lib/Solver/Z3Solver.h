@@ -12,6 +12,7 @@
 #define KLEE_Z3SOLVER_H
 
 #include "klee/Solver/Solver.h"
+#include <z3.h>
 
 namespace klee {
 /// Z3Solver - A complete solver based on Z3
@@ -19,6 +20,7 @@ class Z3Solver : public Solver {
 public:
   /// Z3Solver - Construct a new Z3Solver.
   Z3Solver();
+  Z3Solver(std::unique_ptr<SolverImpl> impl);
 
   /// Get the query in SMT-LIBv2 format.
   /// \return A C-style string. The caller is responsible for freeing this.
@@ -28,6 +30,8 @@ public:
   /// value; 0
   /// is off.
   virtual void setCoreSolverTimeout(time::Span timeout);
+
+  std::unique_ptr<Solver> fork() override;
 };
 }
 

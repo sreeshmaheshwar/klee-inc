@@ -74,8 +74,8 @@ StackFrame::~StackFrame() {
 
 /***/
 
-ExecutionState::ExecutionState(KFunction *kf, MemoryManager *mm)
-    : pc(kf->instructions), prevPC(pc) {
+ExecutionState::ExecutionState(KFunction *kf, MemoryManager *mm, std::unique_ptr<TimingSolver> timingSolver)
+    : solver(std::move(timingSolver)),  pc(kf->instructions), prevPC(pc) {
   pushFrame(nullptr, kf);
   setID();
   if (mm->stackFactory && mm->heapFactory) {
@@ -93,6 +93,7 @@ ExecutionState::~ExecutionState() {
 }
 
 ExecutionState::ExecutionState(const ExecutionState& state):
+    solver(std::make_unique<TimingSolver>(state.solver->solver->fork(), state.solver->simplifyExprs)),
     pc(state.pc),
     prevPC(state.prevPC),
     stack(state.stack),

@@ -29,6 +29,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <memory>
+#include <optional>
 
 namespace {
 // NOTE: Very useful for debugging Z3 behaviour. These files can be given to
@@ -60,16 +61,6 @@ namespace klee {
 
 class Z3SolverImpl : public SolverImpl {
 private:
-  ConstraintSet assertionStack;
-  Z3_solver z3Solver;
-  std::unique_ptr<Z3Builder> builder;
-  time::Span timeout;
-  SolverRunStatus runStatusCode;
-  std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
-  ::Z3_params solverParameters;
-  // Parameter symbols
-  ::Z3_symbol timeoutParamStrSymbol;
-
   bool internalRunSolverIncremental(const Query &,
                                     const std::vector<const Array *> *,
                                     std::vector<std::vector<unsigned char> > *,
@@ -81,7 +72,19 @@ private:
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
 
 public:
-  Z3SolverImpl();
+  ConstraintSet assertionStack;
+  Z3_solver z3Solver;
+  std::unique_ptr<Z3Builder> builder;
+  time::Span timeout;
+  SolverRunStatus runStatusCode;
+  std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
+  ::Z3_params solverParameters;
+  // Parameter symbols
+  ::Z3_symbol timeoutParamStrSymbol;
+
+  Z3SolverImpl(std::optional<Z3_solver> oldSolver = std::nullopt, 
+    std::optional<Z3_context> oldContext = std::nullopt,
+    std::optional<ConstraintSet> oldAssertionStack = std::nullopt);
   ~Z3SolverImpl();
 
   std::string getConstraintLog(const Query &) override;
@@ -109,7 +112,7 @@ public:
   SolverRunStatus getOperationStatusCode();
 };
 
-Z3SolverImpl::Z3SolverImpl()
+Z3SolverImpl::Z3SolverImpl(std::optional<Z3_solver> oldSolver, std::optional<Z3_context> oldContext, std::optional<ConstraintSet> oldAssertionStack)
     : builder(new Z3Builder(
           /*autoClearConstructCache=*/false,
           /*z3LogInteractionFileArg=*/Z3LogInteractionFile.size() > 0
@@ -142,7 +145,14 @@ Z3SolverImpl::Z3SolverImpl()
   }
 
   if (UseIncrementalSolver) {
-    z3Solver = Z3_mk_solver(builder->ctx);
+    if (oldSolver) {
+      z3Solver = Z3_solver_translate(*oldContext, *oldSolver, builder->ctx);  
+      for (const auto& constraint : *oldAssertionStack) {
+          assertionStack.push_back(constraint); // Add the current stuff.
+      }
+    } else {
+      z3Solver = Z3_mk_solver(builder->ctx);
+    }
     Z3_solver_inc_ref(builder->ctx, z3Solver);
     Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
   }
@@ -156,6 +166,7 @@ Z3SolverImpl::~Z3SolverImpl() {
 }
 
 Z3Solver::Z3Solver() : Solver(std::make_unique<Z3SolverImpl>()) {}
+Z3Solver::Z3Solver(std::unique_ptr<SolverImpl> impl) : Solver(std::move(impl)) {}
 
 std::string Z3Solver::getConstraintLog(const Query &query) {
   return impl->getConstraintLog(query);
@@ -163,6 +174,18 @@ std::string Z3Solver::getConstraintLog(const Query &query) {
 
 void Z3Solver::setCoreSolverTimeout(time::Span timeout) {
   impl->setCoreSolverTimeout(timeout);
+}
+
+std::unique_ptr<Solver> Z3Solver::fork() {
+  std::unique_ptr<Z3SolverImpl> ptr;
+  auto *tmp = dynamic_cast<Z3SolverImpl*>(impl.get());
+  if(tmp) {
+    impl.release();
+    ptr.reset(tmp);
+  }
+  auto ret = std::make_unique<Z3Solver>(std::make_unique<Z3SolverImpl>(ptr->z3Solver, ptr->builder->ctx, ptr->assertionStack));
+  impl = std::move(ptr);
+  return std::move(ret);
 }
 
 std::string Z3SolverImpl::getConstraintLog(const Query &query) {
@@ -348,49 +371,52 @@ bool Z3SolverImpl::internalRunSolverIncremental(
   TimerStatIncrementer t(stats::queryTime);
 
   // TODO: Reduce duplication with STPSolverImpl::computeInitialValues.
-  auto stack_it = assertionStack.begin();
+  auto stack_it = assertionStack.begin(); // TODO: not really assertion stack anymore!
   auto query_it = query.constraints.begin();
   // LCP between the assertion stack and the query constraints.
   while (stack_it != assertionStack.end() && query_it != query.constraints.end() && !(*stack_it)->compare(*(*query_it))) {
     ++stack_it;
     ++query_it;
   }
-  // Pop off extra constraints from stack.
-  size_t pops = std::distance(stack_it, assertionStack.end());
-  for (size_t i = 0; i < pops; ++i) {
-    Z3_solver_pop(builder->ctx, z3Solver, 1);
-    assertionStack.pop_back();
+  if (stack_it != assertionStack.end()) {
+    klee_warning("Solver:\n%s\n", Z3_solver_to_string(builder->ctx, z3Solver));
+    klee_error("Old constraint set is not prefix of current one! Have you disabled optimiations?");
   }
-  // Add the remaining query constraints.
-  while (query_it != query.constraints.end()) {
-    Z3_solver_push(builder->ctx, z3Solver);
-    assertionStack.push_back(*query_it);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
 
+  // Add the remaining query constraints.
+  {
     ConstantArrayFinder constant_arrays_in_query;
-    constant_arrays_in_query.visit(*query_it);
-    // Add constant array assertions, NB: at the same level, to benefit from
-    // incrementality over them. Downside is that we may assert the same
-    // constraint multiple times.
+    while (query_it != query.constraints.end()) {
+      assertionStack.push_back(*query_it);
+      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
+      // Add constant array assertions, NB: at the same level, to benefit from
+      // incrementality over them. Downside is that we may assert the same
+      // constraint multiple times.
+      constant_arrays_in_query.visit(*query_it);
+      ++query_it;
+    }
+
     for (auto const &constant_array : constant_arrays_in_query.results) {
       assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-              "Constant array found in query, but not handled by Z3Builder");
+            "Constant array found in query, but not handled by Z3Builder");
       for (auto const &arrayIndexValueExpr :
-            builder->constant_array_assertions[constant_array]) {
+          builder->constant_array_assertions[constant_array]) {
         Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
       }
     }
-
-    ++query_it;
   }
 
   ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
 
-  // We don't persist the negation of the query expression to the assertion stack;
-  // it is unintuitive that negation would aid future constraint sets.
-  // Push a level for constraints related to the query expression:
+  /**
+   * TODO:
+   * Really need to remove this!
+   * This will cause all learning to be within this push/pop scope, so 
+   * we don't get any incrementality!
+   * Instead, let's use a single assumption literal.
+   */
   Z3_solver_push(builder->ctx, z3Solver);
   Z3ASTHandle z3QueryExpr =
       Z3ASTHandle(builder->construct(query.expr), builder->ctx);

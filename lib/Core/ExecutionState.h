@@ -158,6 +158,8 @@ private:
 public:
   using stack_ty = std::vector<StackFrame>;
 
+  std::unique_ptr<TimingSolver> solver;
+
   // Execution - Control Flow specific
 
   /// @brief Pointer to instruction to be executed after the current
@@ -261,7 +263,7 @@ public:
   ExecutionState() = default;
 #endif
   // only to create the initial state
-  explicit ExecutionState(KFunction *kf, MemoryManager *mm);
+  explicit ExecutionState(KFunction *kf, MemoryManager *mm, std::unique_ptr<TimingSolver> timingSolver);
   // no copy assignment, use copy constructor
   ExecutionState &operator=(const ExecutionState &) = delete;
   // no move ctor

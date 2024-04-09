@@ -56,6 +56,8 @@
 #include "klee/System/MemoryUsage.h"
 #include "klee/System/Time.h"
 
+#include "klee/Solver/Solver.h"
+
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Attributes.h"
@@ -497,19 +499,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
 
   coreSolverTimeout = time::Span{MaxCoreSolverTime};
   if (coreSolverTimeout) UseForkedCoreSolver = true;
-  std::unique_ptr<Solver> coreSolver = klee::createCoreSolver(CoreSolverToUse);
-  if (!coreSolver) {
-    klee_error("Failed to create core solver\n");
-  }
-
-  std::unique_ptr<Solver> solver = constructSolverChain(
-      std::move(coreSolver),
-      interpreterHandler->getOutputFilename(ALL_QUERIES_SMT2_FILE_NAME),
-      interpreterHandler->getOutputFilename(SOLVER_QUERIES_SMT2_FILE_NAME),
-      interpreterHandler->getOutputFilename(ALL_QUERIES_KQUERY_FILE_NAME),
-      interpreterHandler->getOutputFilename(SOLVER_QUERIES_KQUERY_FILE_NAME));
-
-  this->solver = std::make_unique<TimingSolver>(std::move(solver), EqualitySubstitution);
+  
   memory = std::make_unique<MemoryManager>(&arrayCache);
 
   initializeSearchOptions();
@@ -946,7 +936,7 @@ void Executor::branch(ExecutionState &state,
       unsigned i;
       for (i=0; i<N; ++i) {
         ref<ConstantExpr> res;
-        bool success = solver->getValue(
+        bool success = state.solver->getValue(
             state.constraints, siit->assignment.evaluate(conditions[i]), res,
             state.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
@@ -1019,7 +1009,7 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
   if (reached_max_fork_limit || reached_max_cp_fork_limit ||
       reached_max_solver_limit || reached_max_cp_solver_limit) {
     ref<klee::ConstantExpr> value;
-    bool success = solver->getValue(current.constraints, condition, value,
+    bool success = current.solver->getValue(current.constraints, condition, value,
                                     current.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     (void)success;
@@ -1049,10 +1039,10 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
   time::Span timeout = coreSolverTimeout;
   if (isSeeding)
     timeout *= static_cast<unsigned>(it->second.size());
-  solver->setTimeout(timeout);
-  bool success = solver->evaluate(current.constraints, condition, res,
+  current.solver->setTimeout(timeout);
+  bool success = current.solver->evaluate(current.constraints, condition, res,
                                   current.queryMetaData);
-  solver->setTimeout(time::Span());
+  current.solver->setTimeout(time::Span());
   if (!success) {
     current.pc = current.prevPC;
     terminateStateOnSolverError(current, "Query timed out (fork).");
@@ -1106,7 +1096,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       ref<ConstantExpr> res;
-      bool success = solver->getValue(current.constraints,
+      bool success = current.solver->getValue(current.constraints,
                                       siit->assignment.evaluate(condition), res,
                                       current.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
@@ -1168,7 +1158,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       for (std::vector<SeedInfo>::iterator siit = seeds.begin(), 
              siie = seeds.end(); siit != siie; ++siit) {
         ref<ConstantExpr> res;
-        bool success = solver->getValue(current.constraints,
+        bool success = current.solver->getValue(current.constraints,
                                         siit->assignment.evaluate(condition),
                                         res, current.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
@@ -1244,13 +1234,13 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       bool res;
-      bool success = solver->mustBeFalse(state.constraints,
+      bool success = state.solver->mustBeFalse(state.constraints,
                                          siit->assignment.evaluate(condition),
                                          res, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
-        siit->patchSeed(state, condition, solver.get());
+        siit->patchSeed(state, condition, state.solver.get());
         warn = true;
       }
     }
@@ -1301,16 +1291,16 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     ref<ConstantExpr> value;
     bool isTrue = false;
     e = optimizer.optimizeExpr(e, true);
-    solver->setTimeout(coreSolverTimeout);
-    if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
+    state.solver->setTimeout(coreSolverTimeout);
+    if (state.solver->getValue(state.constraints, e, value, state.queryMetaData)) {
       ref<Expr> cond = EqExpr::create(e, value);
       cond = optimizer.optimizeExpr(cond, false);
-      if (solver->mustBeTrue(state.constraints, cond, isTrue,
+      if (state.solver->mustBeTrue(state.constraints, cond, isTrue,
                              state.queryMetaData) &&
           isTrue)
         result = value;
     }
-    solver->setTimeout(time::Span());
+    state.solver->setTimeout(time::Span());
   }
   
   return result;
@@ -1327,7 +1317,7 @@ ref<klee::ConstantExpr> Executor::toConstant(ExecutionState &state, ref<Expr> e,
   ref<ConstantExpr> cvalue = getValueFromSeeds(state, e);
   if (!cvalue) {
     [[maybe_unused]] bool success =
-        solver->getValue(state.constraints, e, cvalue, state.queryMetaData);
+        state.solver->getValue(state.constraints, e, cvalue, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
   }
 
@@ -1373,7 +1363,7 @@ void Executor::executeGetValue(ExecutionState &state,
     ref<ConstantExpr> value;
     e = optimizer.optimizeExpr(e, true);
     bool success =
-        solver->getValue(state.constraints, e, value, state.queryMetaData);
+        state.solver->getValue(state.constraints, e, value, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
     bindLocal(target, state, value);
@@ -1385,7 +1375,7 @@ void Executor::executeGetValue(ExecutionState &state,
       cond = optimizer.optimizeExpr(cond, true);
       ref<ConstantExpr> value;
       bool success =
-          solver->getValue(state.constraints, cond, value, state.queryMetaData);
+          state.solver->getValue(state.constraints, cond, value, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       values.insert(value);
@@ -2281,7 +2271,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // check feasibility
       bool result;
       bool success __attribute__((unused)) =
-          solver->mayBeTrue(state.constraints, e, result, state.queryMetaData);
+          state.solver->mayBeTrue(state.constraints, e, result, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       if (result) {
         targets.push_back(d);
@@ -2290,7 +2280,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     // check errorCase feasibility
     bool result;
-    bool success __attribute__((unused)) = solver->mayBeTrue(
+    bool success __attribute__((unused)) = state.solver->mayBeTrue(
         state.constraints, errorCase, result, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     if (result) {
@@ -2370,7 +2360,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         // Check if control flow could take this case
         bool result;
         match = optimizer.optimizeExpr(match, false);
-        bool success = solver->mayBeTrue(state.constraints, match, result,
+        bool success = state.solver->mayBeTrue(state.constraints, match, result,
                                          state.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
@@ -2399,7 +2389,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // Check if control could take the default case
       defaultValue = optimizer.optimizeExpr(defaultValue, false);
       bool res;
-      bool success = solver->mayBeTrue(state.constraints, defaultValue, res,
+      bool success = state.solver->mayBeTrue(state.constraints, defaultValue, res,
                                        state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
@@ -2525,7 +2515,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         v = optimizer.optimizeExpr(v, true);
         ref<ConstantExpr> value;
         bool success =
-            solver->getValue(free->constraints, v, value, free->queryMetaData);
+            free->solver->getValue(free->constraints, v, value, free->queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
         StatePair res = fork(*free, EqExpr::create(v, value), true, BranchType::Call);
@@ -3715,14 +3705,14 @@ std::string Executor::getAddressInfo(ExecutionState &state,
     example = CE->getZExtValue();
   } else {
     ref<ConstantExpr> value;
-    bool success = solver->getValue(state.constraints, address, value,
+    bool success = state.solver->getValue(state.constraints, address, value,
                                     state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
     example = value->getZExtValue();
     info << "\texample: " << example << "\n";
     std::pair<ref<Expr>, ref<Expr>> res =
-        solver->getRange(state.constraints, address, state.queryMetaData);
+        state.solver->getRange(state.constraints, address, state.queryMetaData);
     info << "\trange: [" << res.first << ", " << res.second <<"]\n";
   }
   
@@ -4256,7 +4246,7 @@ void Executor::executeAlloc(ExecutionState &state,
     // Check if in seed mode, then try to replicate size from a seed
     ref<ConstantExpr> example = getValueFromSeeds(state, size);
     if (!example) {
-      bool success = solver->getValue(state.constraints, size, example,
+      bool success = state.solver->getValue(state.constraints, size, example,
                                       state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void)success;
@@ -4267,7 +4257,7 @@ void Executor::executeAlloc(ExecutionState &state,
         ref<ConstantExpr> tmp = example->LShr(ConstantExpr::alloc(1, W));
         bool res;
         [[maybe_unused]] bool success =
-            solver->mayBeTrue(state.constraints, EqExpr::create(tmp, size), res,
+            state.solver->mayBeTrue(state.constraints, EqExpr::create(tmp, size), res,
                               state.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
         if (!res)
@@ -4282,12 +4272,12 @@ void Executor::executeAlloc(ExecutionState &state,
     if (fixedSize.second) { 
       // Check for exactly two values
       ref<ConstantExpr> tmp;
-      bool success = solver->getValue(fixedSize.second->constraints, size, tmp,
+      bool success = fixedSize.second->solver->getValue(fixedSize.second->constraints, size, tmp,
                                       fixedSize.second->queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");      
       (void) success;
       bool res;
-      success = solver->mustBeTrue(fixedSize.second->constraints,
+      success = fixedSize.second->solver->mustBeTrue(fixedSize.second->constraints,
                                    EqExpr::create(tmp, size), res,
                                    fixedSize.second->queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");      
@@ -4371,7 +4361,7 @@ void Executor::resolveExact(ExecutionState &state,
   p = optimizer.optimizeExpr(p, true);
   // XXX we may want to be capping this?
   ResolutionList rl;
-  state.addressSpace.resolve(state, solver.get(), p, rl);
+  state.addressSpace.resolve(state, state.solver.get(), p, rl);
   
   ExecutionState *unbound = &state;
   for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); 
@@ -4429,7 +4419,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
   ObjectPair op;
   bool success;
-  solver->setTimeout(coreSolverTimeout);
+  state.solver->setTimeout(coreSolverTimeout);
 
   bool resolveSingleObject = SingleObjectResolution;
 
@@ -4441,7 +4431,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (base_it != state.base_addrs.end()) {
       // Concrete address found in the map, now find the associated memory
       // object
-      if (!state.addressSpace.resolveOne(state, solver.get(), base_it->second, op,
+      if (!state.addressSpace.resolveOne(state, state.solver.get(), base_it->second, op,
                                          success) ||
           !success) {
         klee_warning("Failed to resolve concrete address from the base_addrs "
@@ -4460,11 +4450,11 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 
   if (!resolveSingleObject) {
-    if (!state.addressSpace.resolveOne(state, solver.get(), address, op, success)) {
+    if (!state.addressSpace.resolveOne(state, state.solver.get(), address, op, success)) {
       address = toConstant(state, address, "resolveOne failure");
       success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
     }
-    solver->setTimeout(time::Span());
+    state.solver->setTimeout(time::Span());
 
     if (success) {
       const MemoryObject *mo = op.first;
@@ -4478,10 +4468,10 @@ void Executor::executeMemoryOperation(ExecutionState &state,
       check = optimizer.optimizeExpr(check, true);
 
       bool inBounds;
-      solver->setTimeout(coreSolverTimeout);
-      bool success = solver->mustBeTrue(state.constraints, check, inBounds,
+      state.solver->setTimeout(coreSolverTimeout);
+      bool success = state.solver->mustBeTrue(state.constraints, check, inBounds,
                                         state.queryMetaData);
-      solver->setTimeout(time::Span());
+      state.solver->setTimeout(time::Span());
       if (!success) {
         state.pc = state.prevPC;
         terminateStateOnSolverError(state, "Query timed out (bounds check).");
@@ -4520,10 +4510,10 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   bool incomplete = false;
 
   if (!resolveSingleObject) {
-    solver->setTimeout(coreSolverTimeout);
-    incomplete = state.addressSpace.resolve(state, solver.get(), address, rl, 0,
+    state.solver->setTimeout(coreSolverTimeout);
+    incomplete = state.addressSpace.resolve(state, state.solver.get(), address, rl, 0,
                                             coreSolverTimeout);
-    solver->setTimeout(time::Span());
+    state.solver->setTimeout(time::Span());
   } else {
     rl.push_back(op); // we already have the object pair, no need to look for it
   }
@@ -4717,8 +4707,12 @@ void Executor::runFunctionAsMain(Function *f,
     }
   }
 
+  std::unique_ptr<Solver> solver = klee::createCoreSolver(CoreSolverToUse);
+  if (!solver) klee_error("Failed to create core solver\n");
+  std::unique_ptr<TimingSolver> timingSolver = std::make_unique<TimingSolver>(std::move(solver), EqualitySubstitution);
+
   ExecutionState *state =
-      new ExecutionState(kmodule->functionMap[f], memory.get());
+      new ExecutionState(kmodule->functionMap[f], memory.get(), std::move(timingSolver));
 
   if (pathWriter) 
     state->pathOS = pathWriter->open();
@@ -4793,7 +4787,7 @@ void Executor::getConstraintLog(const ExecutionState &state, std::string &res,
   switch (logFormat) {
   case STP: {
     Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
-    res = solver->getConstraintLog(query);
+    res = state.solver->getConstraintLog(query);
   } break;
 
   case KQUERY: {
@@ -4824,7 +4818,7 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                                    std::pair<std::string,
                                    std::vector<unsigned char> > >
                                    &res) {
-  solver->setTimeout(coreSolverTimeout);
+  state.solver->setTimeout(coreSolverTimeout);
 
   ConstraintSet extendedConstraints(state.constraints);
   ConstraintManager cm(extendedConstraints);
@@ -4837,11 +4831,14 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   // an example) While this process can be very expensive, it can
   // also make understanding individual test cases much easier.
   for (auto& pi: state.cexPreferences) {
+    klee_error("This is weird...");
+    assert(false);
+
     bool mustBeTrue;
     // Attempt to bound byte to constraints held in cexPreferences
     bool success =
-      solver->mustBeTrue(extendedConstraints, Expr::createIsZero(pi),
-        mustBeTrue, state.queryMetaData);
+      state.solver->mustBeTrue(extendedConstraints, Expr::createIsZero(pi),
+        mustBeTrue, state.queryMetaData); // TODO: Weird!
     // If it isn't possible to add the condition without making the entire list
     // UNSAT, then just continue to the next condition
     if (!success) break;
@@ -4855,9 +4852,9 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   std::vector<const Array*> objects;
   for (unsigned i = 0; i != state.symbolics.size(); ++i)
     objects.push_back(state.symbolics[i].second);
-  bool success = solver->getInitialValues(extendedConstraints, objects, values,
+  bool success = state.solver->getInitialValues(extendedConstraints, objects, values,
                                           state.queryMetaData);
-  solver->setTimeout(time::Span());
+  state.solver->setTimeout(time::Span());
   if (!success) {
     klee_warning("unable to compute initial values (invalid constraints?)!");
     ExprPPrinter::printQuery(llvm::errs(), state.constraints,
@@ -4881,7 +4878,7 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
   abort(); // FIXME: Broken until we sort out how to do the write back.
 
   if (DebugCheckForImpliedValues)
-    ImpliedValue::checkForImpliedValues(solver->solver.get(), e, value);
+    ImpliedValue::checkForImpliedValues(state.solver->solver.get(), e, value);
 
   ImpliedValueList results;
   ImpliedValue::getImpliedValues(e, value, results);
