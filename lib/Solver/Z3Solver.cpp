@@ -269,6 +269,8 @@ bool Z3SolverImpl::internalRunSolver(
   // TODO: Investigate using a custom tactic as described in
   // https://github.com/klee/klee/issues/653
   Z3_solver theSolver = Z3_mk_solver(builder->ctx);
+  // Activate incremental solver - note that we make a new solver here.
+  Z3_solver_push(builder->ctx, theSolver); 
   Z3_solver_inc_ref(builder->ctx, theSolver);
   Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
 
