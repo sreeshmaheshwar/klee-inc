@@ -271,6 +271,8 @@ bool Z3SolverImpl::internalRunSolver(
   Z3_solver theSolver = Z3_mk_solver(builder->ctx);
   Z3_solver_inc_ref(builder->ctx, theSolver);
   Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
+  // Activate incremental solver - note that we make a new solver here.
+  Z3_solver_push(builder->ctx, theSolver); 
 
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
 
