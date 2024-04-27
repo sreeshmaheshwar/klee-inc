@@ -389,13 +389,14 @@ bool Z3SolverImpl::internalRunSolverIncremental(
     while (query_it != query.constraints.end()) {
       assertionStack.push_back(*query_it);
       Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
-      // Add constant array assertions, NB: at the same level, to benefit from
-      // incrementality over them. Downside is that we may assert the same
-      // constraint multiple times.
       constant_arrays_in_query.visit(*query_it);
       ++query_it;
     }
 
+    // Now, add all constant array assertions. Note that we don't ever
+    // pop except for the final query, so it is fine to add them here.
+    // However, we must not add them after the `push` that occurs next,
+    // since then they will be popped!
     for (auto const &constant_array : constant_arrays_in_query.results) {
       assert(builder->constant_array_assertions.count(constant_array) == 1 &&
             "Constant array found in query, but not handled by Z3Builder");
@@ -410,13 +411,8 @@ bool Z3SolverImpl::internalRunSolverIncremental(
   if (objects)
     ++stats::queryCounterexamples;
 
-  /**
-   * TODO:
-   * Really need to remove this!
-   * This will cause all learning to be within this push/pop scope, so 
-   * we don't get any incrementality!
-   * Instead, let's use a single assumption literal.
-   */
+  // TODO: Is it fine to push here and pop after. given that
+  // this is where (check-sat) is invoked and lemmas are learned?
   Z3_solver_push(builder->ctx, z3Solver);
   Z3ASTHandle z3QueryExpr =
       Z3ASTHandle(builder->construct(query.expr), builder->ctx);

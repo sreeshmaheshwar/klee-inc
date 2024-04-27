@@ -4831,14 +4831,19 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   // an example) While this process can be very expensive, it can
   // also make understanding individual test cases much easier.
   for (auto& pi: state.cexPreferences) {
-    klee_error("This is weird...");
-    assert(false);
-
     bool mustBeTrue;
     // Attempt to bound byte to constraints held in cexPreferences
+
+    // This solver invocation is very delicate. I am not sure whether it
+    // is fine to simply use the current incremental strategy (without even
+    // pushing). I'd have thought that this constraint set may be used in the
+    // future and so we should push/pop surrounding this, but if I leave it
+    // like this, surprisingly, the "previous constraint set being a prefix
+    // of the current one" error/assertion within `Z3Solver.cpp` is not hit.
     bool success =
       state.solver->mustBeTrue(extendedConstraints, Expr::createIsZero(pi),
-        mustBeTrue, state.queryMetaData); // TODO: Weird!
+        mustBeTrue, state.queryMetaData); 
+
     // If it isn't possible to add the condition without making the entire list
     // UNSAT, then just continue to the next condition
     if (!success) break;
