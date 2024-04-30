@@ -291,8 +291,8 @@ bool Z3SolverImpl::internalRunSolver(
   if (IncrementalBaseline) {
     // Activate Solver2 with a push - no need to pop since the solver
     // is local.
-    Z3_solver_push(builder->ctx, theSolver); 
-  } 
+    Z3_solver_push(builder->ctx, theSolver);
+  }
 
   Z3_solver_inc_ref(builder->ctx, theSolver);
   Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
