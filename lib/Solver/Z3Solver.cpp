@@ -70,7 +70,6 @@ namespace klee {
 
 class Z3SolverImpl : public SolverImpl {
 private:
-  std::vector<ConstraintSet> assertionStack;
   ConstraintSet ppStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
@@ -461,34 +460,11 @@ bool Z3SolverImpl::internalRunSolverBasicStack(
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
-  auto query_it = query.constraints.begin();
-  if (Verbose) {
-    klee_warning("Debugging assertion stack");
-  }
-  for (auto const &level : assertionStack) {
-    if (Verbose) {
-      klee_warning("%d ", level.size());
-    }
-    auto stack_it = level.begin();
-    while (stack_it != level.end() && query_it != query.constraints.end() && !(*stack_it)->compare(*(*query_it))) {
-      ++stack_it;
-      ++query_it;
-    }
-    if (stack_it != level.end()) {
-      klee_error("Old constraint set is not prefix of current one! Have you disabled optimiations?");
-    }
-  }
-  if (Verbose) {
-    klee_warning("Done debugging assertion stack\n");
-  }
-
   { // Add the remaining query constraints.
     ConstantArrayFinder constant_arrays_in_query;
-    while (query_it != query.constraints.end()) {
-      assertionStack.back().push_back(*query_it);
-      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
-      constant_arrays_in_query.visit(*query_it);
-      ++query_it;
+    for (const auto& constraint : query.constraints) {
+      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(constraint));
+      constant_arrays_in_query.visit(constraint);
     }
     // It's okay to do these all in one go after (due to set semantics, it'll be good).
     // Think about the DFS pushing and popping to see why. No need to add to the stack.
@@ -501,6 +477,8 @@ bool Z3SolverImpl::internalRunSolverBasicStack(
       }
     }
   }
+
+  query.constraints.clear(); // We've added them all to the solver.
 
   ++stats::solverQueries;
   if (objects)
@@ -825,12 +803,10 @@ SolverImpl::SolverRunStatus Z3SolverImpl::getOperationStatusCode() {
 
 void Z3SolverImpl::push() {
   Z3_solver_push(builder->ctx, z3Solver);
-  assertionStack.emplace_back();
 }
 
 void Z3SolverImpl::pop() {
   Z3_solver_pop(builder->ctx, z3Solver, 1);
-  assertionStack.pop_back();
 }
 
 void Z3Solver::push() {
