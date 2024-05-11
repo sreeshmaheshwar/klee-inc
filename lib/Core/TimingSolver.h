@@ -42,34 +42,34 @@ public:
 
   void setTimeout(time::Span t) { solver->setCoreSolverTimeout(t); }
 
-  std::string getConstraintLog(const Query &query) {
+  std::string getConstraintLog(Query &query) {
     return solver->getConstraintLog(query);
   }
 
-  bool evaluate(const ConstraintSet &, ref<Expr>, Solver::Validity &result,
+  bool evaluate(ConstraintSet &, ref<Expr>, Solver::Validity &result,
                 SolverQueryMetaData &metaData);
 
-  bool mustBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
+  bool mustBeTrue(ConstraintSet &, ref<Expr>, bool &result,
                   SolverQueryMetaData &metaData);
 
-  bool mustBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
+  bool mustBeFalse(ConstraintSet &, ref<Expr>, bool &result,
                    SolverQueryMetaData &metaData);
 
-  bool mayBeTrue(const ConstraintSet &, ref<Expr>, bool &result,
+  bool mayBeTrue(ConstraintSet &, ref<Expr>, bool &result,
                  SolverQueryMetaData &metaData);
 
-  bool mayBeFalse(const ConstraintSet &, ref<Expr>, bool &result,
+  bool mayBeFalse(ConstraintSet &, ref<Expr>, bool &result,
                   SolverQueryMetaData &metaData);
 
-  bool getValue(const ConstraintSet &, ref<Expr> expr,
+  bool getValue(ConstraintSet &, ref<Expr> expr,
                 ref<ConstantExpr> &result, SolverQueryMetaData &metaData);
 
-  bool getInitialValues(const ConstraintSet &,
+  bool getInitialValues(ConstraintSet &,
                         const std::vector<const Array *> &objects,
                         std::vector<std::vector<unsigned char>> &result,
                         SolverQueryMetaData &metaData);
 
-  std::pair<ref<Expr>, ref<Expr>> getRange(const ConstraintSet &,
+  std::pair<ref<Expr>, ref<Expr>> getRange(ConstraintSet &,
                                            ref<Expr> query,
                                            SolverQueryMetaData &metaData);
 };

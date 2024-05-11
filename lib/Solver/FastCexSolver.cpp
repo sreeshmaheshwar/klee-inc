@@ -984,9 +984,9 @@ public:
   FastCexSolver();
   ~FastCexSolver();
 
-  IncompleteSolver::PartialValidity computeTruth(const Query&);  
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query&,
+  IncompleteSolver::PartialValidity computeTruth(Query&);  
+  bool computeValue(Query&, ref<Expr> &result);
+  bool computeInitialValues(Query&,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
                             bool &hasSolution);
@@ -1010,7 +1010,7 @@ FastCexSolver::~FastCexSolver() { }
 /// constraints were proven valid or invalid.
 ///
 /// \return - True if the propagation was able to prove validity or invalidity.
-static bool propagateValues(const Query &query, CexData &cd, bool checkExpr,
+static bool propagateValues(Query &query, CexData &cd, bool checkExpr,
                             bool &isValid) {
   for (const auto &constraint : query.constraints) {
     cd.propagatePossibleValue(constraint, 1);
@@ -1057,7 +1057,7 @@ static bool propagateValues(const Query &query, CexData &cd, bool checkExpr,
 }
 
 IncompleteSolver::PartialValidity 
-FastCexSolver::computeTruth(const Query& query) {
+FastCexSolver::computeTruth(Query& query) {
   CexData cd;
 
   bool isValid;
@@ -1069,7 +1069,7 @@ FastCexSolver::computeTruth(const Query& query) {
   return isValid ? IncompleteSolver::MustBeTrue : IncompleteSolver::MayBeFalse;
 }
 
-bool FastCexSolver::computeValue(const Query& query, ref<Expr> &result) {
+bool FastCexSolver::computeValue(Query& query, ref<Expr> &result) {
   CexData cd;
 
   bool isValid;
@@ -1096,7 +1096,7 @@ bool FastCexSolver::computeValue(const Query& query, ref<Expr> &result) {
 }
 
 bool
-FastCexSolver::computeInitialValues(const Query& query,
+FastCexSolver::computeInitialValues(Query& query,
                                     const std::vector<const Array*>
                                       &objects,
                                     std::vector< std::vector<unsigned char> >

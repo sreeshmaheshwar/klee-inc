@@ -66,8 +66,8 @@ void QueryLoggingSolver::flushBufferConditionally(bool writeToFile) {
   BufferString = "";
 }
 
-void QueryLoggingSolver::startQuery(const Query &query, const char *typeName,
-                                    const Query *falseQuery,
+void QueryLoggingSolver::startQuery(Query &query, const char *typeName,
+                                    Query *falseQuery,
                                     const std::vector<const Array *> *objects) {
   Statistic *S = theStatisticManager->getStatisticByName("Instructions");
   uint64_t instructions = S ? S->getValue() : 0;
@@ -108,7 +108,7 @@ void QueryLoggingSolver::flushBuffer() {
   flushBufferConditionally(writeToFile);
 }
 
-bool QueryLoggingSolver::computeTruth(const Query &query, bool &isValid) {
+bool QueryLoggingSolver::computeTruth(Query &query, bool &isValid) {
   startQuery(query, "Truth");
 
   bool success = solver->impl->computeTruth(query, isValid);
@@ -126,7 +126,7 @@ bool QueryLoggingSolver::computeTruth(const Query &query, bool &isValid) {
   return success;
 }
 
-bool QueryLoggingSolver::computeValidity(const Query &query,
+bool QueryLoggingSolver::computeValidity(Query &query,
                                          Solver::Validity &result) {
   startQuery(query, "Validity");
 
@@ -144,7 +144,7 @@ bool QueryLoggingSolver::computeValidity(const Query &query,
   return success;
 }
 
-bool QueryLoggingSolver::computeValue(const Query &query, ref<Expr> &result) {
+bool QueryLoggingSolver::computeValue(Query &query, ref<Expr> &result) {
   Query withFalse = query.withFalse();
   startQuery(query, "Value", &withFalse);
 
@@ -163,7 +163,7 @@ bool QueryLoggingSolver::computeValue(const Query &query, ref<Expr> &result) {
 }
 
 bool QueryLoggingSolver::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   startQuery(query, "InitialValues", 0, &objects);
 
@@ -208,7 +208,7 @@ SolverImpl::SolverRunStatus QueryLoggingSolver::getOperationStatusCode() {
   return solver->impl->getOperationStatusCode();
 }
 
-std::string QueryLoggingSolver::getConstraintLog(const Query &query) {
+std::string QueryLoggingSolver::getConstraintLog(Query &query) {
   return solver->impl->getConstraintLog(query);
 }
 

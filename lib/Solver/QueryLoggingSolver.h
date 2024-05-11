@@ -42,8 +42,8 @@ protected:
   const std::string queryCommentSign; // sign representing commented lines
                                       // in given a query format
 
-  virtual void startQuery(const Query &query, const char *typeName,
-                          const Query *falseQuery = 0,
+  virtual void startQuery(Query &query, const char *typeName,
+                          Query *falseQuery = 0,
                           const std::vector<const Array *> *objects = 0);
 
   virtual void finishQuery(bool success);
@@ -53,7 +53,7 @@ protected:
   /// file.
   void flushBuffer(void);
 
-  virtual void printQuery(const Query &query, const Query *falseQuery = 0,
+  virtual void printQuery(Query &query, Query *falseQuery = 0,
                           const std::vector<const Array *> *objects = 0) = 0;
   void flushBufferConditionally(bool writeToFile);
 
@@ -63,15 +63,15 @@ public:
                      bool logTimedOut);
 
   /// implementation of the SolverImpl interface
-  bool computeTruth(const Query &query, bool &isValid);
-  bool computeValidity(const Query &query, Solver::Validity &result);
-  bool computeValue(const Query &query, ref<Expr> &result);
-  bool computeInitialValues(const Query &query,
+  bool computeTruth(Query &query, bool &isValid);
+  bool computeValidity(Query &query, Solver::Validity &result);
+  bool computeValue(Query &query, ref<Expr> &result);
+  bool computeInitialValues(Query &query,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span timeout);
 };
 

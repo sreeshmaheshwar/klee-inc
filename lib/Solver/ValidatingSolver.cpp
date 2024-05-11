@@ -30,19 +30,19 @@ public:
             oracle, ownsOracle ? [](Solver *solver) { delete solver; }
                                : [](Solver *) {}) {}
 
-  bool computeValidity(const Query &, Solver::Validity &result);
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
-  bool computeInitialValues(const Query &,
+  bool computeValidity(Query &, Solver::Validity &result);
+  bool computeTruth(Query &, bool &isValid);
+  bool computeValue(Query &, ref<Expr> &result);
+  bool computeInitialValues(Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char>> &values,
                             bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span timeout);
 };
 
-bool ValidatingSolver::computeTruth(const Query &query, bool &isValid) {
+bool ValidatingSolver::computeTruth(Query &query, bool &isValid) {
   bool answer;
 
   if (!solver->impl->computeTruth(query, isValid))
@@ -56,7 +56,7 @@ bool ValidatingSolver::computeTruth(const Query &query, bool &isValid) {
   return true;
 }
 
-bool ValidatingSolver::computeValidity(const Query &query,
+bool ValidatingSolver::computeValidity(Query &query,
                                        Solver::Validity &result) {
   Solver::Validity answer;
 
@@ -71,70 +71,21 @@ bool ValidatingSolver::computeValidity(const Query &query,
   return true;
 }
 
-bool ValidatingSolver::computeValue(const Query &query, ref<Expr> &result) {
-  bool answer;
-
-  if (!solver->impl->computeValue(query, result))
-    return false;
-  // We don't want to compare, but just make sure this is a legal
-  // solution.
-  if (!oracle->impl->computeTruth(
-          query.withExpr(NeExpr::create(query.expr, result)), answer))
-    return false;
-
-  if (answer)
-    assert(0 && "invalid solver result (computeValue)");
-
+bool ValidatingSolver::computeValue(Query &query, ref<Expr> &result) {
   return true;
 }
 
 bool ValidatingSolver::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
-  bool answer;
-
-  if (!solver->impl->computeInitialValues(query, objects, values, hasSolution))
-    return false;
-
-  if (hasSolution) {
-    // Assert the bindings as constraints, and verify that the
-    // conjunction of the actual constraints is satisfiable.
-    ConstraintSet bindings;
-    for (unsigned i = 0; i != values.size(); ++i) {
-      const Array *array = objects[i];
-      assert(array);
-      for (unsigned j = 0; j < array->size; j++) {
-        unsigned char value = values[i][j];
-        bindings.push_back(EqExpr::create(
-            ReadExpr::create(UpdateList(array, 0),
-                             ConstantExpr::alloc(j, array->getDomain())),
-            ConstantExpr::alloc(value, array->getRange())));
-      }
-    }
-    ConstraintManager tmp(bindings);
-    ref<Expr> constraints = Expr::createIsZero(query.expr);
-    for (auto const &constraint : query.constraints)
-      constraints = AndExpr::create(constraints, constraint);
-
-    if (!oracle->impl->computeTruth(Query(bindings, constraints), answer))
-      return false;
-    if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
-  } else {
-    if (!oracle->impl->computeTruth(query, answer))
-      return false;
-    if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
-  }
-
-  return true;
+  assert(0);
 }
 
 SolverImpl::SolverRunStatus ValidatingSolver::getOperationStatusCode() {
   return solver->impl->getOperationStatusCode();
 }
 
-std::string ValidatingSolver::getConstraintLog(const Query &query) {
+std::string ValidatingSolver::getConstraintLog(Query &query) {
   return solver->impl->getConstraintLog(query);
 }
 

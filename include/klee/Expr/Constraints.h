@@ -36,6 +36,7 @@ public:
 
   void push_back(const ref<Expr> &e);
   void pop_back();
+  void clear();
 
   bool operator==(const ConstraintSet &b) const {
     return constraints == b.constraints;

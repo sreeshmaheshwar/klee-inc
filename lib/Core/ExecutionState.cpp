@@ -102,6 +102,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     stackAllocator(state.stackAllocator),
     heapAllocator(state.heapAllocator),
     constraints(state.constraints),
+    delayed(state.delayed), // TODO: I think that delayed should be empty.
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
     coveredLines(state.coveredLines),
@@ -188,6 +189,8 @@ llvm::raw_ostream &klee::operator<<(llvm::raw_ostream &os, const MemoryMap &mm) 
 }
 
 bool ExecutionState::merge(const ExecutionState &b) {
+  klee_error("Merging disallowed..."); // TODO: Remove.
+
   if (DebugLogStateMerge)
     llvm::errs() << "-- attempting merge of A:" << this << " with B:" << &b
                  << "--\n";
@@ -389,8 +392,14 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
 }
 
 void ExecutionState::addConstraint(ref<Expr> e) {
-  ConstraintManager c(constraints);
-  c.addConstraint(e);
+  {
+    ConstraintManager c(constraints);
+    c.addConstraint(e);
+  }
+  { // This may seem wrong, but I think it is fine, as long as we've disabled expression simplifcation.
+    ConstraintManager c(delayed);
+    c.addConstraint(e);
+  }
 }
 
 void ExecutionState::addCexPreference(const ref<Expr> &cond) {

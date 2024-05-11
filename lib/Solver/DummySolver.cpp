@@ -19,10 +19,10 @@ class DummySolverImpl : public SolverImpl {
 public:
   DummySolverImpl();
 
-  bool computeValidity(const Query &, Solver::Validity &result);
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
-  bool computeInitialValues(const Query &,
+  bool computeValidity(Query &, Solver::Validity &result);
+  bool computeTruth(Query &, bool &isValid);
+  bool computeValue(Query &, ref<Expr> &result);
+  bool computeInitialValues(Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
@@ -31,26 +31,26 @@ public:
 
 DummySolverImpl::DummySolverImpl() {}
 
-bool DummySolverImpl::computeValidity(const Query &, Solver::Validity &result) {
+bool DummySolverImpl::computeValidity(Query &, Solver::Validity &result) {
   ++stats::solverQueries;
   // FIXME: We should have stats::queriesFail;
   return false;
 }
 
-bool DummySolverImpl::computeTruth(const Query &, bool &isValid) {
+bool DummySolverImpl::computeTruth(Query &, bool &isValid) {
   ++stats::solverQueries;
   // FIXME: We should have stats::queriesFail;
   return false;
 }
 
-bool DummySolverImpl::computeValue(const Query &, ref<Expr> &result) {
+bool DummySolverImpl::computeValue(Query &, ref<Expr> &result) {
   ++stats::solverQueries;
   ++stats::queryCounterexamples;
   return false;
 }
 
 bool DummySolverImpl::computeInitialValues(
-    const Query &, const std::vector<const Array *> &objects,
+    Query &, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   ++stats::solverQueries;
   ++stats::queryCounterexamples;

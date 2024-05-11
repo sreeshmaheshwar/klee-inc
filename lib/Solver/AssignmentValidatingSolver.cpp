@@ -21,40 +21,40 @@ namespace klee {
 class AssignmentValidatingSolver : public SolverImpl {
 private:
   std::unique_ptr<Solver> solver;
-  void dumpAssignmentQuery(const Query &query, const Assignment &assignment);
+  void dumpAssignmentQuery(Query &query, const Assignment &assignment);
 
 public:
   AssignmentValidatingSolver(std::unique_ptr<Solver> solver)
       : solver(std::move(solver)) {}
 
-  bool computeValidity(const Query &, Solver::Validity &result);
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
-  bool computeInitialValues(const Query &,
+  bool computeValidity(Query &, Solver::Validity &result);
+  bool computeTruth(Query &, bool &isValid);
+  bool computeValue(Query &, ref<Expr> &result);
+  bool computeInitialValues(Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span timeout);
 };
 
 // TODO: use computeInitialValues for all queries for more stress testing
-bool AssignmentValidatingSolver::computeValidity(const Query &query,
+bool AssignmentValidatingSolver::computeValidity(Query &query,
                                                  Solver::Validity &result) {
   return solver->impl->computeValidity(query, result);
 }
-bool AssignmentValidatingSolver::computeTruth(const Query &query,
+bool AssignmentValidatingSolver::computeTruth(Query &query,
                                               bool &isValid) {
   return solver->impl->computeTruth(query, isValid);
 }
-bool AssignmentValidatingSolver::computeValue(const Query &query,
+bool AssignmentValidatingSolver::computeValue(Query &query,
                                               ref<Expr> &result) {
   return solver->impl->computeValue(query, result);
 }
 
 bool AssignmentValidatingSolver::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   bool success =
       solver->impl->computeInitialValues(query, objects, values, hasSolution);
@@ -120,7 +120,7 @@ bool AssignmentValidatingSolver::computeInitialValues(
 }
 
 void AssignmentValidatingSolver::dumpAssignmentQuery(
-    const Query &query, const Assignment &assignment) {
+    Query &query, const Assignment &assignment) {
   // Create a Query that is augmented with constraints that
   // enforce the given assignment.
   auto constraints = assignment.createConstraintsFromAssignment();
@@ -141,7 +141,7 @@ AssignmentValidatingSolver::getOperationStatusCode() {
   return solver->impl->getOperationStatusCode();
 }
 
-std::string AssignmentValidatingSolver::getConstraintLog(const Query &query) {
+std::string AssignmentValidatingSolver::getConstraintLog(Query &query) {
   return solver->impl->getConstraintLog(query);
 }
 

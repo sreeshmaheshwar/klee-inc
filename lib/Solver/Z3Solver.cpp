@@ -81,19 +81,19 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
 
-  bool internalRunSolverBasicStack(const Query &,
+  bool internalRunSolverBasicStack(Query &,
                                     const std::vector<const Array *> *,
                                     std::vector<std::vector<unsigned char> > *,
                                     bool &hasSolution);
-  bool internalRunSolverLcpPp(const Query &,
+  bool internalRunSolverLcpPp(Query &,
                                     const std::vector<const Array *> *,
                                     std::vector<std::vector<unsigned char> > *,
                                     bool &hasSolution);
-  bool internalRunSolverGlobalBaseline(const Query &,
+  bool internalRunSolverGlobalBaseline(Query &,
                                        const std::vector<const Array *> *,
                                        std::vector<std::vector<unsigned char> > *,
                                        bool &hasSolution);
-  bool internalRunSolver(const Query &,
+  bool internalRunSolver(Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
                          bool &hasSolution);
@@ -103,7 +103,7 @@ public:
   Z3SolverImpl();
   ~Z3SolverImpl();
 
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span _timeout) {
     timeout = _timeout;
 
@@ -114,9 +114,9 @@ public:
                        timeoutInMilliSeconds);
   }
 
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
-  bool computeInitialValues(const Query &,
+  bool computeTruth(Query &, bool &isValid);
+  bool computeValue(Query &, ref<Expr> &result);
+  bool computeInitialValues(Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
@@ -179,7 +179,7 @@ Z3SolverImpl::~Z3SolverImpl() {
 
 Z3Solver::Z3Solver() : Solver(std::make_unique<Z3SolverImpl>()) {}
 
-std::string Z3Solver::getConstraintLog(const Query &query) {
+std::string Z3Solver::getConstraintLog(Query &query) {
   return impl->getConstraintLog(query);
 }
 
@@ -187,7 +187,7 @@ void Z3Solver::setCoreSolverTimeout(time::Span timeout) {
   impl->setCoreSolverTimeout(timeout);
 }
 
-std::string Z3SolverImpl::getConstraintLog(const Query &query) {
+std::string Z3SolverImpl::getConstraintLog(Query &query) {
   std::vector<Z3ASTHandle> assumptions;
   // We use a different builder here because we don't want to interfere
   // with the solver's builder because it may change the solver builder's
@@ -243,7 +243,7 @@ std::string Z3SolverImpl::getConstraintLog(const Query &query) {
   return {result};
 }
 
-bool Z3SolverImpl::computeTruth(const Query &query, bool &isValid) {
+bool Z3SolverImpl::computeTruth(Query &query, bool &isValid) {
   bool hasSolution = false; // to remove compiler warning
   bool status =
       internalRunSolver(query, /*objects=*/NULL, /*values=*/NULL, hasSolution);
@@ -251,7 +251,7 @@ bool Z3SolverImpl::computeTruth(const Query &query, bool &isValid) {
   return status;
 }
 
-bool Z3SolverImpl::computeValue(const Query &query, ref<Expr> &result) {
+bool Z3SolverImpl::computeValue(Query &query, ref<Expr> &result) {
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char> > values;
   bool hasSolution;
@@ -259,7 +259,8 @@ bool Z3SolverImpl::computeValue(const Query &query, ref<Expr> &result) {
   // Find the object used in the expression, and compute an assignment
   // for them.
   findSymbolicObjects(query.expr, objects);
-  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
+  auto tmp=query.withFalse();
+  if (!computeInitialValues(tmp, objects, values, hasSolution))
     return false;
   assert(hasSolution && "state has invalid constraint set");
 
@@ -271,13 +272,13 @@ bool Z3SolverImpl::computeValue(const Query &query, ref<Expr> &result) {
 }
 
 bool Z3SolverImpl::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
 bool Z3SolverImpl::internalRunSolver(
-    const Query &query, const std::vector<const Array *> *objects,
+    Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   if (BasicStackSolver) {
     return internalRunSolverBasicStack(query, objects, values, hasSolution);
@@ -379,7 +380,7 @@ bool Z3SolverImpl::internalRunSolver(
 }
 
 bool Z3SolverImpl::internalRunSolverGlobalBaseline(
-    const Query &query, const std::vector<const Array *> *objects,
+    Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
@@ -455,7 +456,7 @@ bool Z3SolverImpl::internalRunSolverGlobalBaseline(
 }
 
 bool Z3SolverImpl::internalRunSolverBasicStack(
-    const Query &query, const std::vector<const Array *> *objects,
+    Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
@@ -572,7 +573,7 @@ bool Z3SolverImpl::internalRunSolverBasicStack(
 }
 
 bool Z3SolverImpl::internalRunSolverLcpPp(
-    const Query &query, const std::vector<const Array *> *objects,
+    Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);

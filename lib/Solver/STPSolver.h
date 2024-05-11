@@ -27,7 +27,7 @@ public:
 
   /// getConstraintLog - Return the constraint log for the given state in CVC
   /// format.
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
 
   /// setCoreSolverTimeout - Set constraint solver timeout delay to the given
   /// value; 0

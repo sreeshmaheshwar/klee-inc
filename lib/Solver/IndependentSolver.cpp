@@ -262,7 +262,7 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
 //
 // Caller takes ownership of returned std::list.
 static std::list<IndependentElementSet>*
-getAllIndependentConstraintsSets(const Query &query) {
+getAllIndependentConstraintsSets(Query &query) {
   std::list<IndependentElementSet> *factors = new std::list<IndependentElementSet>();
   ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr);
   if (CE) {
@@ -320,7 +320,7 @@ getAllIndependentConstraintsSets(const Query &query) {
 }
 
 static 
-IndependentElementSet getIndependentConstraints(const Query& query,
+IndependentElementSet getIndependentConstraints(Query& query,
                                                 std::vector< ref<Expr> > &result) {
   IndependentElementSet eltsClosure(query.expr);
   std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
@@ -396,153 +396,44 @@ public:
   IndependentSolver(std::unique_ptr<Solver> solver)
       : solver(std::move(solver)) {}
 
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query& query,
+  bool computeTruth(Query&, bool &isValid);
+  bool computeValidity(Query&, Solver::Validity &result);
+  bool computeValue(Query&, ref<Expr> &result);
+  bool computeInitialValues(Query& query,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
                             bool &hasSolution);
   SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query&) override;
+  std::string getConstraintLog(Query&) override;
   void setCoreSolverTimeout(time::Span timeout);
 };
   
-bool IndependentSolver::computeValidity(const Query& query,
-                                        Solver::Validity &result) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure =
-    getIndependentConstraints(query, required);
-  ConstraintSet tmp(required);
-  return solver->impl->computeValidity(Query(tmp, query.expr), 
-                                       result);
+bool IndependentSolver::computeValidity(Query& query,
+                                        Solver::Validity &result) { return 0;
 }
 
-bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure = 
-    getIndependentConstraints(query, required);
-  ConstraintSet tmp(required);
-  return solver->impl->computeTruth(Query(tmp, query.expr), 
-                                    isValid);
+bool IndependentSolver::computeTruth(Query& query, bool &isValid) {
+  return 0;
 }
 
-bool IndependentSolver::computeValue(const Query& query, ref<Expr> &result) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure = 
-    getIndependentConstraints(query, required);
-  ConstraintSet tmp(required);
-  return solver->impl->computeValue(Query(tmp, query.expr), result);
+bool IndependentSolver::computeValue(Query& query, ref<Expr> &result) {
+  return 0;
 }
 
 // Helper function used only for assertions to make sure point created
 // during computeInitialValues is in fact correct. The ``retMap`` is used
 // in the case ``objects`` doesn't contain all the assignments needed.
 bool assertCreatedPointEvaluatesToTrue(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char>> &values,
     std::map<const Array *, std::vector<unsigned char>> &retMap) {
-  // _allowFreeValues is set to true so that if there are missing bytes in the
-  // assignment we will end up with a non ConstantExpr after evaluating the
-  // assignment and fail
-  Assignment assign = Assignment(objects, values, /*_allowFreeValues=*/true);
-
-  // Add any additional bindings.
-  // The semantics of std::map should be to not insert a (key, value)
-  // pair if it already exists so we should continue to use the assignment
-  // from ``objects`` and ``values``.
-  if (retMap.size() > 0)
-    assign.bindings.insert(retMap.begin(), retMap.end());
-
-  for (auto const &constraint : query.constraints) {
-    ref<Expr> ret = assign.evaluate(constraint);
-
-    assert(isa<ConstantExpr>(ret) &&
-           "assignment evaluation did not result in constant");
-    ref<ConstantExpr> evaluatedConstraint = dyn_cast<ConstantExpr>(ret);
-    if (evaluatedConstraint->isFalse()) {
-      return false;
-    }
-  }
-  ref<Expr> neg = Expr::createIsZero(query.expr);
-  ref<Expr> q = assign.evaluate(neg);
-  assert(isa<ConstantExpr>(q) &&
-         "assignment evaluation did not result in constant");
-  return cast<ConstantExpr>(q)->isTrue();
+  return 0;
 }
 
-bool IndependentSolver::computeInitialValues(const Query& query,
+bool IndependentSolver::computeInitialValues(Query& query,
                                              const std::vector<const Array*> &objects,
                                              std::vector< std::vector<unsigned char> > &values,
                                              bool &hasSolution){
-  // We assume the query has a solution except proven differently
-  // This is important in case we don't have any constraints but
-  // we need initial values for requested array objects.
-  hasSolution = true;
-  // FIXME: When we switch to C++11 this should be a std::unique_ptr so we don't need
-  // to remember to manually call delete
-  std::list<IndependentElementSet> *factors = getAllIndependentConstraintsSets(query);
-
-  //Used to rearrange all of the answers into the correct order
-  std::map<const Array*, std::vector<unsigned char> > retMap;
-  for (std::list<IndependentElementSet>::iterator it = factors->begin();
-       it != factors->end(); ++it) {
-    std::vector<const Array*> arraysInFactor;
-    calculateArrayReferences(*it, arraysInFactor);
-    // Going to use this as the "fresh" expression for the Query() invocation below
-    assert(it->exprs.size() >= 1 && "No null/empty factors");
-    if (arraysInFactor.size() == 0){
-      continue;
-    }
-    ConstraintSet tmp(it->exprs);
-    std::vector<std::vector<unsigned char> > tempValues;
-    if (!solver->impl->computeInitialValues(Query(tmp, ConstantExpr::alloc(0, Expr::Bool)),
-                                            arraysInFactor, tempValues, hasSolution)){
-      values.clear();
-      delete factors;
-      return false;
-    } else if (!hasSolution){
-      values.clear();
-      delete factors;
-      return true;
-    } else {
-      assert(tempValues.size() == arraysInFactor.size() &&
-             "Should be equal number arrays and answers");
-      for (unsigned i = 0; i < tempValues.size(); i++){
-        if (retMap.count(arraysInFactor[i])){
-          // We already have an array with some partially correct answers,
-          // so we need to place the answers to the new query into the right
-          // spot while avoiding the undetermined values also in the array
-          std::vector<unsigned char> * tempPtr = &retMap[arraysInFactor[i]];
-          assert(tempPtr->size() == tempValues[i].size() &&
-                 "we're talking about the same array here");
-          ::DenseSet<unsigned> * ds = &(it->elements[arraysInFactor[i]]);
-          for (std::set<unsigned>::iterator it2 = ds->begin(); it2 != ds->end(); it2++){
-            unsigned index = * it2;
-            (* tempPtr)[index] = tempValues[i][index];
-          }
-        } else {
-          // Dump all the new values into the array
-          retMap[arraysInFactor[i]] = tempValues[i];
-        }
-      }
-    }
-  }
-  for (std::vector<const Array *>::const_iterator it = objects.begin();
-       it != objects.end(); it++){
-    const Array * arr = * it;
-    if (!retMap.count(arr)){
-      // this means we have an array that is somehow related to the
-      // constraint, but whose values aren't actually required to
-      // satisfy the query.
-      std::vector<unsigned char> ret(arr->size);
-      values.push_back(ret);
-    } else {
-      values.push_back(retMap[arr]);
-    }
-  }
-  assert(assertCreatedPointEvaluatesToTrue(query, objects, values, retMap) && "should satisfy the equation");
-  delete factors;
   return true;
 }
 
@@ -550,7 +441,7 @@ SolverImpl::SolverRunStatus IndependentSolver::getOperationStatusCode() {
   return solver->impl->getOperationStatusCode();      
 }
 
-std::string IndependentSolver::getConstraintLog(const Query& query) {
+std::string IndependentSolver::getConstraintLog(Query& query) {
   return solver->impl->getConstraintLog(query);
 }
 

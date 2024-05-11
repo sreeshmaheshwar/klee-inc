@@ -27,7 +27,7 @@ const char *Solver::validity_to_str(Validity v) {
 Solver::Solver(std::unique_ptr<SolverImpl> impl) : impl(std::move(impl)) {}
 Solver::~Solver() = default;
 
-std::string Solver::getConstraintLog(const Query& query) {
+std::string Solver::getConstraintLog(Query& query) {
     return impl->getConstraintLog(query);
 }
 
@@ -35,7 +35,7 @@ void Solver::setCoreSolverTimeout(time::Span timeout) {
     impl->setCoreSolverTimeout(timeout);
 }
 
-bool Solver::evaluate(const Query& query, Validity &result) {
+bool Solver::evaluate(Query& query, Validity &result) {
   assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
 
   // Maintain invariants implementations expect.
@@ -47,7 +47,7 @@ bool Solver::evaluate(const Query& query, Validity &result) {
   return impl->computeValidity(query, result);
 }
 
-bool Solver::mustBeTrue(const Query& query, bool &result) {
+bool Solver::mustBeTrue(Query& query, bool &result) {
   assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
 
   // Maintain invariants implementations expect.
@@ -59,11 +59,12 @@ bool Solver::mustBeTrue(const Query& query, bool &result) {
   return impl->computeTruth(query, result);
 }
 
-bool Solver::mustBeFalse(const Query& query, bool &result) {
-  return mustBeTrue(query.negateExpr(), result);
+bool Solver::mustBeFalse(Query& query, bool &result) {
+  Query tmp = query.negateExpr(); 
+  return mustBeTrue(tmp, result);
 }
 
-bool Solver::mayBeTrue(const Query& query, bool &result) {
+bool Solver::mayBeTrue(Query& query, bool &result) {
   bool res;
   if (!mustBeFalse(query, res))
     return false;
@@ -71,7 +72,7 @@ bool Solver::mayBeTrue(const Query& query, bool &result) {
   return true;
 }
 
-bool Solver::mayBeFalse(const Query& query, bool &result) {
+bool Solver::mayBeFalse(Query& query, bool &result) {
   bool res;
   if (!mustBeTrue(query, res))
     return false;
@@ -79,7 +80,7 @@ bool Solver::mayBeFalse(const Query& query, bool &result) {
   return true;
 }
 
-bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
+bool Solver::getValue(Query& query, ref<ConstantExpr> &result) {
   // Maintain invariants implementation expect.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
     result = CE;
@@ -96,7 +97,7 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
 }
 
 bool 
-Solver::getInitialValues(const Query& query,
+Solver::getInitialValues(Query& query,
                          const std::vector<const Array*> &objects,
                          std::vector< std::vector<unsigned char> > &values) {
   bool hasSolution;
@@ -109,7 +110,7 @@ Solver::getInitialValues(const Query& query,
   return success;
 }
 
-std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
+std::pair< ref<Expr>, ref<Expr> > Solver::getRange(Query& query) {
   ref<Expr> e = query.expr;
   Expr::Width width = e->getWidth();
   uint64_t min, max;
@@ -134,12 +135,13 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
     while (lo<hi) {
       mid = lo + (hi - lo)/2;
       bool res;
-      bool success = 
-        mustBeTrue(query.withExpr(
+      auto tmp = query.withExpr(
                      EqExpr::create(LShrExpr::create(e,
                                                      ConstantExpr::create(mid, 
                                                                           width)),
-                                    ConstantExpr::create(0, width))),
+                                    ConstantExpr::create(0, width)));
+      bool success = 
+        mustBeTrue(tmp,
                    res);
 
       assert(success && "FIXME: Unhandled solver failure");
@@ -159,9 +161,10 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
 
     // check common case
     bool res = false;
+    auto tmp=query.withExpr(EqExpr::create(e, ConstantExpr::create(0, 
+                                                                      width)));
     bool success = 
-      mayBeTrue(query.withExpr(EqExpr::create(e, ConstantExpr::create(0, 
-                                                                      width))), 
+      mayBeTrue(tmp, 
                 res);
 
     assert(success && "FIXME: Unhandled solver failure");      
@@ -175,10 +178,11 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
       while (lo<hi) {
         mid = lo + (hi - lo)/2;
         bool res = false;
-        bool success = 
-          mayBeTrue(query.withExpr(UleExpr::create(e, 
+        auto tmp=query.withExpr(UleExpr::create(e, 
                                                    ConstantExpr::create(mid, 
-                                                                        width))),
+                                                                        width)));
+        bool success = 
+          mayBeTrue(tmp,
                     res);
 
         assert(success && "FIXME: Unhandled solver failure");      
@@ -199,10 +203,11 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
     while (lo<hi) {
       mid = lo + (hi - lo)/2;
       bool res;
-      bool success = 
-        mustBeTrue(query.withExpr(UleExpr::create(e, 
+      auto t2=query.withExpr(UleExpr::create(e, 
                                                   ConstantExpr::create(mid, 
-                                                                       width))),
+                                                                       width)));
+      bool success = 
+        mustBeTrue(t2,
                    res);
 
       assert(success && "FIXME: Unhandled solver failure");      

@@ -27,10 +27,10 @@ private:
   ref<Expr> canonicalizeQuery(ref<Expr> originalQuery,
                               bool &negationUsed);
 
-  void cacheInsert(const Query& query,
+  void cacheInsert(Query& query,
                    IncompleteSolver::PartialValidity result);
 
-  bool cacheLookup(const Query& query,
+  bool cacheLookup(Query& query,
                    IncompleteSolver::PartialValidity &result);
   
   struct CacheEntry {
@@ -70,13 +70,13 @@ private:
 public:
   CachingSolver(std::unique_ptr<Solver> solver) : solver(std::move(solver)) {}
 
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValue(const Query& query, ref<Expr> &result) {
+  bool computeValidity(Query&, Solver::Validity &result);
+  bool computeTruth(Query&, bool &isValid);
+  bool computeValue(Query& query, ref<Expr> &result) {
     ++stats::queryCacheMisses;
     return solver->impl->computeValue(query, result);
   }
-  bool computeInitialValues(const Query& query,
+  bool computeInitialValues(Query& query,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,
                             bool &hasSolution) {
@@ -85,7 +85,7 @@ public:
                                               hasSolution);
   }
   SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query&) override;
+  std::string getConstraintLog(Query&) override;
   void setCoreSolverTimeout(time::Span timeout);
 };
 
@@ -108,7 +108,7 @@ ref<Expr> CachingSolver::canonicalizeQuery(ref<Expr> originalQuery,
 
 /** @returns true on a cache hit, false of a cache miss.  Reference
     value result only valid on a cache hit. */
-bool CachingSolver::cacheLookup(const Query& query,
+bool CachingSolver::cacheLookup(Query& query,
                                 IncompleteSolver::PartialValidity &result) {
   bool negationUsed;
   ref<Expr> canonicalQuery = canonicalizeQuery(query.expr, negationUsed);
@@ -127,7 +127,7 @@ bool CachingSolver::cacheLookup(const Query& query,
 }
 
 /// Inserts the given query, result pair into the cache.
-void CachingSolver::cacheInsert(const Query& query,
+void CachingSolver::cacheInsert(Query& query,
                                 IncompleteSolver::PartialValidity result) {
   bool negationUsed;
   ref<Expr> canonicalQuery = canonicalizeQuery(query.expr, negationUsed);
@@ -139,76 +139,13 @@ void CachingSolver::cacheInsert(const Query& query,
   cache.insert(std::make_pair(ce, cachedResult));
 }
 
-bool CachingSolver::computeValidity(const Query& query,
+bool CachingSolver::computeValidity(Query& query,
                                     Solver::Validity &result) {
-  IncompleteSolver::PartialValidity cachedResult;
-  bool tmp, cacheHit = cacheLookup(query, cachedResult);
-  
-  if (cacheHit) {
-    switch(cachedResult) {
-    case IncompleteSolver::MustBeTrue:   
-      result = Solver::True;
-      ++stats::queryCacheHits;
-      return true;
-    case IncompleteSolver::MustBeFalse:  
-      result = Solver::False;
-      ++stats::queryCacheHits;
-      return true;
-    case IncompleteSolver::TrueOrFalse:  
-      result = Solver::Unknown;
-      ++stats::queryCacheHits;
-      return true;
-    case IncompleteSolver::MayBeTrue: {
-      ++stats::queryCacheMisses;
-      if (!solver->impl->computeTruth(query, tmp))
-        return false;
-      if (tmp) {
-        cacheInsert(query, IncompleteSolver::MustBeTrue);
-        result = Solver::True;
-        return true;
-      } else {
-        cacheInsert(query, IncompleteSolver::TrueOrFalse);
-        result = Solver::Unknown;
-        return true;
-      }
-    }
-    case IncompleteSolver::MayBeFalse: {
-      ++stats::queryCacheMisses;
-      if (!solver->impl->computeTruth(query.negateExpr(), tmp))
-        return false;
-      if (tmp) {
-        cacheInsert(query, IncompleteSolver::MustBeFalse);
-        result = Solver::False;
-        return true;
-      } else {
-        cacheInsert(query, IncompleteSolver::TrueOrFalse);
-        result = Solver::Unknown;
-        return true;
-      }
-    }
-    default: assert(0 && "unreachable");
-    }
-  }
-
-  ++stats::queryCacheMisses;
-  
-  if (!solver->impl->computeValidity(query, result))
-    return false;
-
-  switch (result) {
-  case Solver::True: 
-    cachedResult = IncompleteSolver::MustBeTrue; break;
-  case Solver::False: 
-    cachedResult = IncompleteSolver::MustBeFalse; break;
-  default: 
-    cachedResult = IncompleteSolver::TrueOrFalse; break;
-  }
-  
-  cacheInsert(query, cachedResult);
+  assert(0);
   return true;
 }
 
-bool CachingSolver::computeTruth(const Query& query,
+bool CachingSolver::computeTruth(Query& query,
                                  bool &isValid) {
   IncompleteSolver::PartialValidity cachedResult;
   bool cacheHit = cacheLookup(query, cachedResult);
@@ -246,7 +183,7 @@ SolverImpl::SolverRunStatus CachingSolver::getOperationStatusCode() {
   return solver->impl->getOperationStatusCode();
 }
 
-std::string CachingSolver::getConstraintLog(const Query& query) {
+std::string CachingSolver::getConstraintLog(Query& query) {
   return solver->impl->getConstraintLog(query);
 }
 

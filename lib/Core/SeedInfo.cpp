@@ -59,7 +59,7 @@ KTestObject *SeedInfo::getNextInput(const MemoryObject *mo,
   }
 }
 
-void SeedInfo::patchSeed(const ExecutionState &state, 
+void SeedInfo::patchSeed(ExecutionState &state, 
                          ref<Expr> condition,
                          TimingSolver *solver) {
   ConstraintSet required(state.constraints);

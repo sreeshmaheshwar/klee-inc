@@ -22,7 +22,7 @@ public:
   MetaSMTSolver(bool useForked, bool optimizeDivides);
   virtual ~MetaSMTSolver();
 
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   virtual void setCoreSolverTimeout(time::Span timeout);
 };
 

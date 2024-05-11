@@ -33,10 +33,10 @@ namespace klee {
 
   struct Query {
   public:
-    const ConstraintSet &constraints;
+    ConstraintSet &constraints;
     ref<Expr> expr;
 
-    Query(const ConstraintSet& _constraints, ref<Expr> _expr)
+    Query(ConstraintSet& _constraints, ref<Expr> _expr)
       : constraints(_constraints), expr(_expr) {
     }
 
@@ -96,7 +96,7 @@ namespace klee {
     /// Solver::Unknown
     ///
     /// \return True on success.
-    bool evaluate(const Query&, Validity &result);
+    bool evaluate(Query&, Validity &result);
   
     /// mustBeTrue - Determine if the expression is provably true.
     /// 
@@ -114,7 +114,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula is true
     ///
     /// \return True on success.
-    bool mustBeTrue(const Query&, bool &result);
+    bool mustBeTrue(Query&, bool &result);
 
     /// mustBeFalse - Determine if the expression is provably false.
     ///
@@ -132,7 +132,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula is false
     ///
     /// \return True on success.
-    bool mustBeFalse(const Query&, bool &result);
+    bool mustBeFalse(Query&, bool &result);
 
     /// mayBeTrue - Determine if there is a valid assignment for the given state
     /// in which the expression evaluates to true.
@@ -151,7 +151,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula may be true
     ///
     /// \return True on success.
-    bool mayBeTrue(const Query&, bool &result);
+    bool mayBeTrue(Query&, bool &result);
 
     /// mayBeFalse - Determine if there is a valid assignment for the given
     /// state in which the expression evaluates to false.
@@ -170,7 +170,7 @@ namespace klee {
     /// \param [out] result - On success, true iff the logical formula may be false
     ///
     /// \return True on success.
-    bool mayBeFalse(const Query&, bool &result);
+    bool mayBeFalse(Query&, bool &result);
 
     /// getValue - Compute one possible value for the given expression.
     ///
@@ -178,7 +178,7 @@ namespace klee {
     /// satisfying assignment.
     ///
     /// \return True on success.
-    bool getValue(const Query&, ref<ConstantExpr> &result);
+    bool getValue(Query&, ref<ConstantExpr> &result);
 
     /// getInitialValues - Compute the initial values for a list of objects.
     ///
@@ -195,7 +195,7 @@ namespace klee {
     // FIXME: This API is lame. We should probably just provide an API which
     // returns an Assignment object, then clients can get out whatever values
     // they want. This also allows us to optimize the representation.
-    bool getInitialValues(const Query&, 
+    bool getInitialValues(Query&, 
                           const std::vector<const Array*> &objects,
                           std::vector< std::vector<unsigned char> > &result);
 
@@ -209,9 +209,9 @@ namespace klee {
     ///       mayBeTrue(max == e))
     //
     // FIXME: This should go into a helper class, and should handle failure.
-    virtual std::pair< ref<Expr>, ref<Expr> > getRange(const Query&);
+    virtual std::pair< ref<Expr>, ref<Expr> > getRange(Query&);
     
-    virtual std::string getConstraintLog(const Query& query);
+    virtual std::string getConstraintLog(Query& query);
     virtual void setCoreSolverTimeout(time::Span timeout);
   };
 

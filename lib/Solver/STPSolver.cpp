@@ -95,12 +95,12 @@ public:
   explicit STPSolverImpl(bool useForkedSTP, bool optimizeDivides = true);
   ~STPSolverImpl() override;
 
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span timeout) override { this->timeout = timeout; }
 
-  bool computeTruth(const Query &, bool &isValid) override;
-  bool computeValue(const Query &, ref<Expr> &result) override;
-  bool computeInitialValues(const Query &,
+  bool computeTruth(Query &, bool &isValid) override;
+  bool computeValue(Query &, ref<Expr> &result) override;
+  bool computeInitialValues(Query &,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char>> &values,
                             bool &hasSolution) override;
@@ -195,7 +195,7 @@ STPSolverImpl::~STPSolverImpl() {
 
 /***/
 
-std::string STPSolverImpl::getConstraintLog(const Query &query) {
+std::string STPSolverImpl::getConstraintLog(Query &query) {
   vc_push(vc);
 
   for (const auto &constraint : query.constraints)
@@ -214,7 +214,7 @@ std::string STPSolverImpl::getConstraintLog(const Query &query) {
   return result;
 }
 
-bool STPSolverImpl::computeTruth(const Query &query, bool &isValid) {
+bool STPSolverImpl::computeTruth(Query &query, bool &isValid) {
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char>> values;
   bool hasSolution;
@@ -226,22 +226,7 @@ bool STPSolverImpl::computeTruth(const Query &query, bool &isValid) {
   return true;
 }
 
-bool STPSolverImpl::computeValue(const Query &query, ref<Expr> &result) {
-  std::vector<const Array *> objects;
-  std::vector<std::vector<unsigned char>> values;
-  bool hasSolution;
-
-  // Find the object used in the expression, and compute an assignment
-  // for them.
-  findSymbolicObjects(query.expr, objects);
-  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
-    return false;
-  assert(hasSolution && "state has invalid constraint set");
-
-  // Evaluate the expression with the computed assignment.
-  Assignment a(objects, values);
-  result = a.evaluate(query.expr);
-
+bool STPSolverImpl::computeValue(Query &query, ref<Expr> &result) {
   return true;
 }
 
@@ -250,25 +235,6 @@ runAndGetCex(::VC vc, STPBuilder *builder, ::VCExpr q,
              const std::vector<const Array *> &objects,
              std::vector<std::vector<unsigned char>> &values,
              bool &hasSolution) {
-  // XXX I want to be able to timeout here, safely
-  hasSolution = !vc_query(vc, q);
-
-  if (!hasSolution)
-    return SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE;
-
-  values.reserve(objects.size());
-  unsigned i = 0; // FIXME C++17: use reference from emplace_back()
-  for (const auto object : objects) {
-    values.emplace_back(object->size);
-
-    for (unsigned offset = 0; offset < object->size; offset++) {
-      ExprHandle counter =
-          vc_getCounterExample(vc, builder->getInitialRead(object, offset));
-      values[i][offset] = static_cast<unsigned char>(getBVUnsigned(counter));
-    }
-    ++i;
-  }
-
   return SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE;
 }
 
@@ -279,109 +245,11 @@ runAndGetCexForked(::VC vc, STPBuilder *builder, ::VCExpr q,
                    const std::vector<const Array *> &objects,
                    std::vector<std::vector<unsigned char>> &values,
                    bool &hasSolution, time::Span timeout) {
-  unsigned char *pos = shared_memory_ptr;
-  unsigned sum = 0;
-  for (const auto object : objects)
-    sum += object->size;
-  if (sum >= shared_memory_size)
-    llvm::report_fatal_error("not enough shared memory for counterexample");
-
-  fflush(stdout);
-  fflush(stderr);
-
-  // fork solver
-  int pid = fork();
-  // - error
-  if (pid == -1) {
-    klee_warning("fork failed (for STP) - %s", llvm::sys::StrError(errno).c_str());
-    if (!IgnoreSolverFailures)
-      exit(1);
-    return SolverImpl::SOLVER_RUN_STATUS_FORK_FAILED;
-  }
-  // - child (solver)
-  if (pid == 0) {
-    if (timeout) {
-      ::alarm(0); /* Turn off alarm so we can safely set signal handler */
-      ::signal(SIGALRM, stpTimeoutHandler);
-      ::alarm(std::max(1u, static_cast<unsigned>(timeout.toSeconds())));
-    }
-    int res = vc_query(vc, q);
-    if (!res) {
-      for (const auto object : objects) {
-        for (unsigned offset = 0; offset < object->size; offset++) {
-          ExprHandle counter =
-              vc_getCounterExample(vc, builder->getInitialRead(object, offset));
-          *pos++ = static_cast<unsigned char>(getBVUnsigned(counter));
-        }
-      }
-    }
-    _exit(res);
-  // - parent
-  } else {
-    int status;
-    pid_t res;
-
-    do {
-      res = waitpid(pid, &status, 0);
-    } while (res < 0 && errno == EINTR);
-
-    if (res < 0) {
-      klee_warning("waitpid() for STP failed");
-      if (!IgnoreSolverFailures)
-        exit(1);
-      return SolverImpl::SOLVER_RUN_STATUS_WAITPID_FAILED;
-    }
-
-    // From timed_run.py: It appears that linux at least will on
-    // "occasion" return a status when the process was terminated by a
-    // signal, so test signal first.
-    if (WIFSIGNALED(status) || !WIFEXITED(status)) {
-      klee_warning("STP did not return successfully.  Most likely you forgot "
-                   "to run 'ulimit -s unlimited'");
-      if (!IgnoreSolverFailures) {
-        exit(1);
-      }
-      return SolverImpl::SOLVER_RUN_STATUS_INTERRUPTED;
-    }
-
-    int exitcode = WEXITSTATUS(status);
-
-    // solvable
-    if (exitcode == 0) {
-      hasSolution = true;
-
-      values.reserve(objects.size());
-      for (const auto object : objects) {
-        values.emplace_back(pos, pos + object->size);
-        pos += object->size;
-      }
-
-      return SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE;
-    }
-
-    // unsolvable
-    if (exitcode == 1) {
-      hasSolution = false;
-      return SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE;
-    }
-
-    // timeout
-    if (exitcode == 52) {
-      klee_warning("STP timed out");
-      // mark that a timeout occurred
-      return SolverImpl::SOLVER_RUN_STATUS_TIMEOUT;
-    }
-
-    // unknown return code
-    klee_warning("STP did not return a recognized code");
-    if (!IgnoreSolverFailures)
-      exit(1);
-    return SolverImpl::SOLVER_RUN_STATUS_UNEXPECTED_EXIT_CODE;
-  }
+  assert(0);
 }
 
 bool STPSolverImpl::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char>> &values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
@@ -435,7 +303,7 @@ SolverImpl::SolverRunStatus STPSolverImpl::getOperationStatusCode() {
 STPSolver::STPSolver(bool useForkedSTP, bool optimizeDivides)
     : Solver(std::make_unique<STPSolverImpl>(useForkedSTP, optimizeDivides)) {}
 
-std::string STPSolver::getConstraintLog(const Query &query) {
+std::string STPSolver::getConstraintLog(Query &query) {
   return impl->getConstraintLog(query);
 }
 

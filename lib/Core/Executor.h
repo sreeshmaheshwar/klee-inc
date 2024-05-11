@@ -386,7 +386,7 @@ private:
   /// Return a unique constant value for the given expression in the
   /// given state, if it has one (i.e. it provably only has a single
   /// value). Otherwise return the original expression.
-  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+  ref<Expr> toUnique(ExecutionState &state, ref<Expr> &e);
 
   /// Return a constant value for the given expression.  If \param concretize is
   /// true, the expression is forced to be a constant by adding a constraint if
@@ -413,7 +413,7 @@ private:
 
   // Determines the \param lastInstruction of the \param state which is not KLEE
   // internal and returns its InstructionInfo
-  const InstructionInfo & getLastNonKleeInternalInstruction(const ExecutionState &state,
+  const InstructionInfo & getLastNonKleeInternalInstruction(ExecutionState &state,
       llvm::Instruction** lastInstruction);
 
   /// Remove state from queue and delete state. This function should only be
@@ -500,7 +500,7 @@ private:
   bool checkMemoryUsage();
 
   /// check if branching/forking is allowed
-  bool branchingPermitted(const ExecutionState &state) const;
+  bool branchingPermitted(ExecutionState &state) const;
 
   void printDebugInstructions(ExecutionState &state);
   void doDumpStates();
@@ -556,20 +556,20 @@ public:
 
   /*** State accessor methods ***/
 
-  unsigned getPathStreamID(const ExecutionState &state) override;
+  unsigned getPathStreamID(ExecutionState &state) override;
 
-  unsigned getSymbolicPathStreamID(const ExecutionState &state) override;
+  unsigned getSymbolicPathStreamID(ExecutionState &state) override;
 
-  void getConstraintLog(const ExecutionState &state, std::string &res,
+  void getConstraintLog(ExecutionState &state, std::string &res,
                         Interpreter::LogType logFormat =
                             Interpreter::STP) override;
 
   bool getSymbolicSolution(
-      const ExecutionState &state,
+      ExecutionState &state,
       std::vector<std::pair<std::string, std::vector<unsigned char>>> &res)
       override;
 
-  void getCoveredLines(const ExecutionState &state,
+  void getCoveredLines(ExecutionState &state,
                        std::map<const std::string *, std::set<unsigned>> &res)
       override;
 
@@ -577,7 +577,7 @@ public:
   size_t getAllocationAlignment(const llvm::Value *allocSite) const;
 
   /// Returns the errno location in memory of the state
-  int *getErrnoLocation(const ExecutionState &state) const;
+  int *getErrnoLocation(ExecutionState &state) const;
 
   MergingSearcher *getMergingSearcher() const { return mergingSearcher; };
   void setMergingSearcher(MergingSearcher *ms) { mergingSearcher = ms; };

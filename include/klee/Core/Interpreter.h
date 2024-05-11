@@ -44,7 +44,7 @@ public:
   virtual void incPathsCompleted() = 0;
   virtual void incPathsExplored(std::uint32_t num = 1) = 0;
 
-  virtual void processTestCase(const ExecutionState &state,
+  virtual void processTestCase(ExecutionState &state,
                                const char *err,
                                const char *suffix) = 0;
 };
@@ -148,21 +148,21 @@ public:
 
   /*** State accessor methods ***/
 
-  virtual unsigned getPathStreamID(const ExecutionState &state) = 0;
+  virtual unsigned getPathStreamID(ExecutionState &state) = 0;
 
-  virtual unsigned getSymbolicPathStreamID(const ExecutionState &state) = 0;
+  virtual unsigned getSymbolicPathStreamID(ExecutionState &state) = 0;
 
-  virtual void getConstraintLog(const ExecutionState &state,
+  virtual void getConstraintLog(ExecutionState &state,
                                 std::string &res,
                                 LogType logFormat = STP) = 0;
 
-  virtual bool getSymbolicSolution(const ExecutionState &state,
+  virtual bool getSymbolicSolution(ExecutionState &state,
                                    std::vector<
                                    std::pair<std::string,
                                    std::vector<unsigned char> > >
                                    &res) = 0;
 
-  virtual void getCoveredLines(const ExecutionState &state,
+  virtual void getCoveredLines(ExecutionState &state,
                                std::map<const std::string*, std::set<unsigned> > &res) = 0;
 };
 

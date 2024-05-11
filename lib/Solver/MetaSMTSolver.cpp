@@ -88,24 +88,24 @@ public:
   MetaSMTSolverImpl(MetaSMTSolver<SolverContext> *solver, bool useForked,
                     bool optimizeDivides);
 
-  std::string getConstraintLog(const Query &) override;
+  std::string getConstraintLog(Query &) override;
   void setCoreSolverTimeout(time::Span timeout) { _timeout = timeout; }
 
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
+  bool computeTruth(Query &, bool &isValid);
+  bool computeValue(Query &, ref<Expr> &result);
 
-  bool computeInitialValues(const Query &query,
+  bool computeInitialValues(Query &query,
                             const std::vector<const Array *> &objects,
                             std::vector<std::vector<unsigned char> > &values,
                             bool &hasSolution);
 
   SolverImpl::SolverRunStatus
-  runAndGetCex(const Query &query, const std::vector<const Array *> &objects,
+  runAndGetCex(Query &query, const std::vector<const Array *> &objects,
                std::vector<std::vector<unsigned char> > &values,
                bool &hasSolution);
 
   SolverImpl::SolverRunStatus
-  runAndGetCexForked(const Query &query,
+  runAndGetCexForked(Query &query,
                      const std::vector<const Array *> &objects,
                      std::vector<std::vector<unsigned char> > &values,
                      bool &hasSolution, time::Span timeout);
@@ -135,12 +135,12 @@ MetaSMTSolverImpl<SolverContext>::MetaSMTSolverImpl(
 }
 
 template <typename SolverContext>
-std::string MetaSMTSolverImpl<SolverContext>::getConstraintLog(const Query &) {
+std::string MetaSMTSolverImpl<SolverContext>::getConstraintLog(Query &) {
   return {"Not supported"};
 }
 
 template <typename SolverContext>
-bool MetaSMTSolverImpl<SolverContext>::computeTruth(const Query &query,
+bool MetaSMTSolverImpl<SolverContext>::computeTruth(Query &query,
                                                     bool &isValid) {
 
   bool success = false;
@@ -158,7 +158,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeTruth(const Query &query,
 }
 
 template <typename SolverContext>
-bool MetaSMTSolverImpl<SolverContext>::computeValue(const Query &query,
+bool MetaSMTSolverImpl<SolverContext>::computeValue(Query &query,
                                                     ref<Expr> &result) {
 
   bool success = false;
@@ -181,7 +181,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeValue(const Query &query,
 
 template <typename SolverContext>
 bool MetaSMTSolverImpl<SolverContext>::computeInitialValues(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
 
   _runStatusCode = SOLVER_RUN_STATUS_FAILURE;
@@ -216,7 +216,7 @@ bool MetaSMTSolverImpl<SolverContext>::computeInitialValues(
 
 template <typename SolverContext>
 SolverImpl::SolverRunStatus MetaSMTSolverImpl<SolverContext>::runAndGetCex(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
 
   // assume the constraints of the query
@@ -265,7 +265,7 @@ static void metaSMTTimeoutHandler(int x) { _exit(52); }
 template <typename SolverContext>
 SolverImpl::SolverRunStatus
 MetaSMTSolverImpl<SolverContext>::runAndGetCexForked(
-    const Query &query, const std::vector<const Array *> &objects,
+    Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution,
     time::Span timeout) {
   unsigned char *pos = shared_memory_ptr;
@@ -406,7 +406,7 @@ template <typename SolverContext>
 MetaSMTSolver<SolverContext>::~MetaSMTSolver() {}
 
 template <typename SolverContext>
-std::string MetaSMTSolver<SolverContext>::getConstraintLog(const Query &query) {
+std::string MetaSMTSolver<SolverContext>::getConstraintLog(Query &query) {
   return impl->getConstraintLog(query);
 }
 

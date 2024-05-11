@@ -23,8 +23,8 @@ class SMTLIBLoggingSolver : public QueryLoggingSolver
         private:
                 ExprSMTLIBPrinter printer;
 
-                virtual void printQuery(const Query& query,
-                                        const Query* falseQuery = 0,
+                virtual void printQuery(Query& query,
+                                        Query* falseQuery = 0,
                                         const std::vector<const Array*>* objects = 0) 
                 {
                         if (0 == falseQuery) 

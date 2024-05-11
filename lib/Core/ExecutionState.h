@@ -191,6 +191,9 @@ public:
   /// @brief Constraints collected so far
   ConstraintSet constraints;
 
+  /// @brief Constraints collected not added to solver's assertion stack.
+  ConstraintSet delayed;
+
   /// Statistics and information
 
   /// @brief Metadata utilized and collected by solvers for this state
