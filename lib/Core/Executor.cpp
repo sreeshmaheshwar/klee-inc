@@ -923,12 +923,7 @@ void Executor::branch(ExecutionState &state,
       ExecutionState *es = result[theRNG.getInt32() % i];
       ExecutionState *ns = es->branch();
       addedStates.push_back(ns);
-      if (Verbose) {
-        klee_warning("Push! - branch");
-      }
-      if (BasicStackSolver) {
-        solver->solver->push();
-      }
+      solver->solver->push();
       result.push_back(ns);
       executionTree->attach(es->executionTreeNode, ns, es, reason);
     }
@@ -1201,13 +1196,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       }
     }
 
-    if (BasicStackSolver) {
-      solver->solver->push(); // TODO: should really change this so timer can time it!
-    }
-
-    if (Verbose) {
-      klee_warning("Push! - fork");
-    }
+    solver->solver->push(); // TODO: should really change this so timer can time it!
 
     executionTree->attach(current.executionTreeNode, falseState, trueState, reason);
     stats::incBranchStat(reason, 1);
@@ -3781,13 +3770,7 @@ void Executor::terminateState(ExecutionState &state,
                       "replay did not consume all objects in test input.");
   }
 
-  if (BasicStackSolver) {
-    solver->solver->pop(); // TODO: Should change - see push comment.
-  }
-
-  if (Verbose) {
-    klee_warning("Pop - terminate %d", state.getID());
-  }
+  solver->solver->pop(); // TODO: Should change - see push comment.
 
   interpreterHandler->incPathsExplored();
   executionTree->setTerminationType(state, reason);
@@ -4745,13 +4728,7 @@ void Executor::runFunctionAsMain(Function *f,
   ExecutionState *state =
       new ExecutionState(kmodule->functionMap[f], memory.get());
 
-  if (BasicStackSolver) {
-    solver->solver->push();
-  }
-
-  if (Verbose) {
-    klee_warning("Starting state %d", state->getID());
-  }
+  solver->solver->push();
 
   if (pathWriter) 
     state->pathOS = pathWriter->open();

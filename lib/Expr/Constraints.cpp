@@ -178,5 +178,3 @@ size_t ConstraintSet::size() const noexcept { return constraints.size(); }
 void ConstraintSet::push_back(const ref<Expr> &e) { constraints.push_back(e); }
 
 void ConstraintSet::clear() { constraints.clear(); }
-
-void ConstraintSet::pop_back() { constraints.pop_back(); }
