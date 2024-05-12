@@ -458,7 +458,8 @@ bool Z3SolverImpl::internalRunSolverBasicStack(
     Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
-  TimerStatIncrementer t(stats::queryTime);
+  // Here, we can time from the start, so we measure the same thing as in LCP-PP, roughly.
+  TimerStatIncrementer t(stats::postLCPTime);
 
   { // Add the remaining query constraints.
     ConstantArrayFinder constant_arrays_in_query;
@@ -554,7 +555,6 @@ bool Z3SolverImpl::internalRunSolverLcpPp(
     Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
-  TimerStatIncrementer t(stats::queryTime);
 
   // TODO: Reduce duplication with STPSolverImpl::computeInitialValues.
   auto stack_it = ppStack.begin();
@@ -564,6 +564,10 @@ bool Z3SolverImpl::internalRunSolverLcpPp(
     ++stack_it;
     ++query_it;
   }
+
+  // Let's time after the LCP has been determined.
+  TimerStatIncrementer t(stats::queryTime);
+
   // Pop off extra constraints from stack.
   size_t pops = std::distance(stack_it, ppStack.end());
   for (size_t i = 0; i < pops; ++i) {
