@@ -455,6 +455,7 @@ void StatsTracker::writeStatsHeader() {
          << "WallTime REAL,"
          << "CoveredInstructions INTEGER,"
          << "UncoveredInstructions INTEGER,"
+         << "PostLCPTime INTEGER,"
          << "QueryTime INTEGER,"
          << "SolverTime INTEGER,"
          << "CexCacheTime INTEGER,"
@@ -502,6 +503,7 @@ void StatsTracker::writeStatsHeader() {
          << "WallTime,"
          << "CoveredInstructions,"
          << "UncoveredInstructions,"
+         << "PostLCPTime,"
          << "QueryTime,"
          << "SolverTime,"
          << "CexCacheTime,"
@@ -585,6 +587,7 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, arg++, elapsed().toMicroseconds());
   sqlite3_bind_int64(insertStmt, arg++, stats::coveredInstructions);
   sqlite3_bind_int64(insertStmt, arg++, stats::uncoveredInstructions);
+  sqlite3_bind_int64(insertStmt, arg++, stats::postLCPTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::queryTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::solverTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::cexCacheTime);
@@ -655,6 +658,7 @@ void StatsTracker::writeIStats() {
   istatsMask.set(sm.getStatisticID("Queries"));
   istatsMask.set(sm.getStatisticID("QueriesValid"));
   istatsMask.set(sm.getStatisticID("QueriesInvalid"));
+  istatsMask.set(sm.getStatisticID("PostLCPTime"));
   istatsMask.set(sm.getStatisticID("QueryTime"));
   istatsMask.set(sm.getStatisticID("ResolveTime"));
   istatsMask.set(sm.getStatisticID("Instructions"));
