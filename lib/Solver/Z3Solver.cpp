@@ -252,7 +252,6 @@ bool Z3SolverImpl::internalRunSolver(
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
-  // TODO: Reduce duplication with STPSolverImpl::computeInitialValues.
   auto stack_it = assertionStack.begin();
   auto query_it = query.constraints.begin();
   // LCP between the assertion stack and the query constraints.
