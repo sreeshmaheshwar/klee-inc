@@ -17,6 +17,7 @@ namespace stats {
 
   extern Statistic cexCacheTime;
   extern Statistic solverQueries;
+  extern Statistic commonConstraints;
   extern Statistic queries;
   extern Statistic queriesInvalid;
   extern Statistic queriesValid;

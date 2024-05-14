@@ -107,6 +107,9 @@ Legend = [
         "SolverQueries",
     ),
     (
+        "CommonConstraints", "number of common constraints between consecutive queries", "CommonConstraints"
+    ),
+    (
         "SolverQueryConstructs",
         "number of query constructs for all queries send to the constraint solver",
         "NumQueryConstructs",

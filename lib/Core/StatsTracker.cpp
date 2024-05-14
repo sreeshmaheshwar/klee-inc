@@ -450,6 +450,7 @@ void StatsTracker::writeStatsHeader() {
          << "MallocUsage INTEGER,"
          << "Queries INTEGER,"
          << "SolverQueries INTEGER,"
+         << "CommonConstraints INTEGER,"
          << "NumQueryConstructs INTEGER,"
          << "WallTime REAL,"
          << "CoveredInstructions INTEGER,"
@@ -497,6 +498,7 @@ void StatsTracker::writeStatsHeader() {
          << "MallocUsage,"
          << "Queries,"
          << "SolverQueries,"
+         << "CommonConstraints,"
          << "NumQueryConstructs,"
          << "WallTime,"
          << "CoveredInstructions,"
@@ -524,6 +526,7 @@ void StatsTracker::writeStatsHeader() {
   #undef TCLASS
   #define TCLASS(Name, I) << "?,"
   insert << " VALUES ("
+         << "?,"
          << "?,"
          << "?,"
          << "?,"
@@ -580,6 +583,7 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, arg++, util::GetTotalMallocUsage() + executor.memory->getUsedDeterministicSize());
   sqlite3_bind_int64(insertStmt, arg++, stats::queries);
   sqlite3_bind_int64(insertStmt, arg++, stats::solverQueries);
+  sqlite3_bind_int64(insertStmt, arg++, stats::commonConstraints);
   sqlite3_bind_int64(insertStmt, arg++, stats::queryConstructs);
   sqlite3_bind_int64(insertStmt, arg++, elapsed().toMicroseconds());
   sqlite3_bind_int64(insertStmt, arg++, stats::coveredInstructions);
