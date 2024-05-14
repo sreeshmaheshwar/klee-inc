@@ -258,6 +258,7 @@ bool Z3SolverImpl::internalRunSolver(
   while (stack_it != assertionStack.end() && query_it != query.constraints.end() && !(*stack_it)->compare(*(*query_it))) {
     ++stack_it;
     ++query_it;
+    ++stats::commonConstraints;
   }
 
   // LCP is computed; start the timer.
