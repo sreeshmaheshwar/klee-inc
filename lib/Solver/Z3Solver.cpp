@@ -257,8 +257,7 @@ bool Z3SolverImpl::computeInitialValues(
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
-  if (query.useGlobal) {
-    klee_warning("Using global");
+  if (query.useGlobal) { // TODO: Extract to separate function.
     runStatusCode = SOLVER_RUN_STATUS_FAILURE;
     TimerStatIncrementer t(stats::queryTime);
 
