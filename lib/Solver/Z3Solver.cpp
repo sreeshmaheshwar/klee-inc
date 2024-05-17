@@ -253,9 +253,9 @@ bool Z3SolverImpl::internalRunSolver(
   TimerStatIncrementer t(stats::queryTime);
 
   auto stack_it = assertionStack.begin();
-  auto query_it = query.constraints.begin();
+  auto query_it = query.constraintsToWrite.begin();
   // LCP between the assertion stack and the query constraints.
-  while (stack_it != assertionStack.end() && query_it != query.constraints.end() && !(*stack_it)->compare(*(*query_it))) {
+  while (stack_it != assertionStack.end() && query_it != query.constraintsToWrite.end() && !(*stack_it)->compare(*(*query_it))) {
     ++stack_it;
     ++query_it;
     ++stats::commonConstraints;
@@ -269,7 +269,7 @@ bool Z3SolverImpl::internalRunSolver(
   assertionStack.erase(stack_it, assertionStack.end());
 
   // Add the remaining query constraints.
-  while (query_it != query.constraints.end()) {
+  while (query_it != query.constraintsToWrite.end()) {
     Z3_solver_push(builder->ctx, z3Solver);
     assertionStack.push_back(*query_it);
     Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));

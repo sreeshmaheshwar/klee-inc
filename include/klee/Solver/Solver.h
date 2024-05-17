@@ -14,7 +14,9 @@
 #include "klee/System/Time.h"
 #include "klee/Solver/SolverCmdLine.h"
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,18 +38,26 @@ namespace klee {
     const ConstraintSet &constraints;
     ref<Expr> expr;
 
+    /// In the partition strategy, we propagate the entire query down the solver
+    /// chain. So, the constraints we write to the solver might differ from `constraints`.
+    const ConstraintSet &constraintsToWrite;
+
     Query(const ConstraintSet& _constraints, ref<Expr> _expr)
-      : constraints(_constraints), expr(_expr) {
+      : constraints(_constraints), expr(_expr), constraintsToWrite(_constraints) {
+    }
+
+    Query(const ConstraintSet& _constraints, ref<Expr> _expr, const ConstraintSet& _constraintsToWrite)
+      : constraints(_constraints), expr(_expr), constraintsToWrite(_constraintsToWrite) {
     }
 
     /// withExpr - Return a copy of the query with the given expression.
     Query withExpr(ref<Expr> _expr) const {
-      return Query(constraints, _expr);
+      return Query(constraints, _expr, constraintsToWrite);
     }
 
     /// withFalse - Return a copy of the query with a false expression.
     Query withFalse() const {
-      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool));
+      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool), constraintsToWrite);
     }
 
     /// negateExpr - Return a copy of the query with the expression negated.

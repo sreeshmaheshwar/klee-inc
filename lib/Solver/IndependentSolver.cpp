@@ -15,6 +15,7 @@
 #include "klee/Expr/Expr.h"
 #include "klee/Expr/ExprUtil.h"
 #include "klee/Support/Debug.h"
+#include "klee/Support/ErrorHandling.h"
 #include "klee/Solver/SolverImpl.h"
 
 #include "llvm/Support/raw_ostream.h"
@@ -414,7 +415,10 @@ bool IndependentSolver::computeValidity(const Query& query,
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  return solver->impl->computeValidity(Query(tmp, query.expr), 
+  // if (query.constraints.size() > tmp.size()) {
+  //   klee_warning("Independence has worked!");
+  // }
+  return solver->impl->computeValidity(Query(tmp, query.expr, query.constraints), 
                                        result);
 }
 
@@ -423,7 +427,10 @@ bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  return solver->impl->computeTruth(Query(tmp, query.expr), 
+  // if (query.constraints.size() > tmp.size()) {
+  //   klee_warning("Independence has worked!");
+  // }
+  return solver->impl->computeTruth(Query(tmp, query.expr, query.constraints), 
                                     isValid);
 }
 
@@ -432,7 +439,10 @@ bool IndependentSolver::computeValue(const Query& query, ref<Expr> &result) {
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  return solver->impl->computeValue(Query(tmp, query.expr), result);
+  // if (query.constraints.size() > tmp.size()) {
+  //   klee_warning("Independence has worked!");
+  // }
+  return solver->impl->computeValue(Query(tmp, query.expr, query.constraints), result);
 }
 
 // Helper function used only for assertions to make sure point created
