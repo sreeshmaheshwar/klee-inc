@@ -62,6 +62,7 @@ class Z3SolverImpl : public SolverImpl {
 private:
   ConstraintSet::constraints_ty assertionStack;
   Z3_solver z3Solver;
+  Z3_solver globalSolver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
@@ -140,10 +141,17 @@ Z3SolverImpl::Z3SolverImpl()
   z3Solver = Z3_mk_solver(builder->ctx);
   Z3_solver_inc_ref(builder->ctx, z3Solver);
   Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
+
+  globalSolver = Z3_mk_solver(builder->ctx);
+  Z3_solver_inc_ref(builder->ctx, globalSolver);
+  Z3_solver_set_params(builder->ctx, globalSolver, solverParameters);
 }
 
 Z3SolverImpl::~Z3SolverImpl() {
   Z3_solver_dec_ref(builder->ctx, z3Solver);
+  Z3_params_dec_ref(builder->ctx, solverParameters);
+
+  Z3_solver_dec_ref(builder->ctx, globalSolver);
   Z3_params_dec_ref(builder->ctx, solverParameters);
 }
 
@@ -249,6 +257,81 @@ bool Z3SolverImpl::computeInitialValues(
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
+  if (query.useGlobal) {
+    klee_warning("Using global");
+    runStatusCode = SOLVER_RUN_STATUS_FAILURE;
+    TimerStatIncrementer t(stats::queryTime);
+
+    Z3_solver_push(builder->ctx, globalSolver); 
+
+    ConstantArrayFinder constant_arrays_in_query;
+    for (auto const &constraint : query.constraints) {
+      Z3_solver_assert(builder->ctx, globalSolver, builder->construct(constraint));
+      constant_arrays_in_query.visit(constraint);
+    }
+    ++stats::solverQueries;
+    if (objects)
+      ++stats::queryCounterexamples;
+
+    Z3ASTHandle z3QueryExpr =
+        Z3ASTHandle(builder->construct(query.expr), builder->ctx);
+    constant_arrays_in_query.visit(query.expr);
+
+    for (auto const &constant_array : constant_arrays_in_query.results) {
+      assert(builder->constant_array_assertions.count(constant_array) == 1 &&
+            "Constant array found in query, but not handled by Z3Builder");
+      for (auto const &arrayIndexValueExpr :
+          builder->constant_array_assertions[constant_array]) {
+        Z3_solver_assert(builder->ctx, globalSolver, arrayIndexValueExpr);
+      }
+    }
+
+    // KLEE Queries are validity queries i.e.
+    // ∀ X Constraints(X) → query(X)
+    // but Z3 works in terms of satisfiability so instead we ask the
+    // negation of the equivalent i.e.
+    // ∃ X Constraints(X) ∧ ¬ query(X)
+    Z3_solver_assert(
+        builder->ctx, globalSolver,
+        Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx));
+
+    if (dumpedQueriesFile) {
+      *dumpedQueriesFile << "; start Z3 query\n";
+      *dumpedQueriesFile << Z3_solver_to_string(builder->ctx, globalSolver);
+      *dumpedQueriesFile << "(check-sat)\n";
+      *dumpedQueriesFile << "(reset)\n";
+      *dumpedQueriesFile << "; end Z3 query\n\n";
+      dumpedQueriesFile->flush();
+    }
+
+    ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, globalSolver);
+    runStatusCode = handleSolverResponse(globalSolver, satisfiable, objects, values,
+                                        hasSolution);
+
+    // Clear the builder's cache to prevent memory usage exploding.
+    // By using ``autoClearConstructCache=false`` and clearning now
+    // we allow Z3_ast expressions to be shared from an entire
+    // ``Query`` rather than only sharing within a single call to
+    // ``builder->construct()``.
+    builder->clearConstructCache();
+
+    Z3_solver_pop(builder->ctx, globalSolver, 1);
+
+    if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
+        runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
+      if (hasSolution) {
+        ++stats::queriesInvalid;
+      } else {
+        ++stats::queriesValid;
+      }
+      return true; // success
+    }
+    if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_INTERRUPTED) {
+      raise(SIGINT);
+    }
+    return false; // failed
+  }
+
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
