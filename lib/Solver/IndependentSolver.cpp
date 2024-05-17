@@ -415,9 +415,6 @@ bool IndependentSolver::computeValidity(const Query& query,
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  // if (query.constraints.size() > tmp.size()) {
-  //   klee_warning("Independence has worked!");
-  // }
   return solver->impl->computeValidity(Query(tmp, query.expr, query.constraints), 
                                        result);
 }
@@ -427,9 +424,6 @@ bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  // if (query.constraints.size() > tmp.size()) {
-  //   klee_warning("Independence has worked!");
-  // }
   return solver->impl->computeTruth(Query(tmp, query.expr, query.constraints), 
                                     isValid);
 }
@@ -439,9 +433,6 @@ bool IndependentSolver::computeValue(const Query& query, ref<Expr> &result) {
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
   ConstraintSet tmp(required);
-  // if (query.constraints.size() > tmp.size()) {
-  //   klee_warning("Independence has worked!");
-  // }
   return solver->impl->computeValue(Query(tmp, query.expr, query.constraints), result);
 }
 
