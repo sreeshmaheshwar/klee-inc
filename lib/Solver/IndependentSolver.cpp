@@ -497,7 +497,7 @@ bool IndependentSolver::computeInitialValues(const Query& query,
     }
     ConstraintSet tmp(it->exprs);
     std::vector<std::vector<unsigned char> > tempValues;
-    if (!solver->impl->computeInitialValues(Query(tmp, ConstantExpr::alloc(0, Expr::Bool), tmp, true),
+    if (!solver->impl->computeInitialValues(Query(tmp, ConstantExpr::alloc(0, Expr::Bool), query.constraints),
                                             arraysInFactor, tempValues, hasSolution)){
       values.clear();
       delete factors;
