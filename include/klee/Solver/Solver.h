@@ -41,14 +41,13 @@ namespace klee {
     /// In the partition strategy, we propagate the entire query down the solver
     /// chain. So, the constraints we write to the solver might differ from `constraints`.
     const ConstraintSet &constraintsToWrite;
-    bool useGlobal = !UseIncrementalSolver;
 
     Query(const ConstraintSet& _constraints, ref<Expr> _expr)
       : constraints(_constraints), expr(_expr), constraintsToWrite(_constraints) {
     }
 
-    Query(const ConstraintSet& _constraints, ref<Expr> _expr, const ConstraintSet& _constraintsToWrite, bool _useGlobal = !UseIncrementalSolver)
-      : constraints(_constraints), expr(_expr), constraintsToWrite(_constraintsToWrite), useGlobal(_useGlobal) {
+    Query(const ConstraintSet& _constraints, ref<Expr> _expr, const ConstraintSet& _constraintsToWrite)
+      : constraints(_constraints), expr(_expr), constraintsToWrite(_constraintsToWrite) {
     }
 
     /// withExpr - Return a copy of the query with the given expression.

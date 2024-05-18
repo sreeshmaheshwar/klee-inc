@@ -174,7 +174,7 @@ bool CachingSolver::computeValidity(const Query& query,
     }
     case IncompleteSolver::MayBeFalse: {
       ++stats::queryCacheMisses;
-      if (!solver->impl->computeTruth(query.negateExpr(), tmp))
+      if (!solver->impl->computeTruth(query.negateExpr(), tmp)) // Here we negate the expression.
         return false;
       if (tmp) {
         cacheInsert(query, IncompleteSolver::MustBeFalse);
