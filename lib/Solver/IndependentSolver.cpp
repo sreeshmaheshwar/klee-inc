@@ -258,10 +258,32 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
   return os;
 }
 
+class IndependentSolver : public SolverImpl {
+private:
+  std::unique_ptr<Solver> solver;
+
+public:
+  IndependentSolver(std::unique_ptr<Solver> solver)
+      : solver(std::move(solver)) {}
+
+  bool computeTruth(const Query&, bool &isValid);
+  bool computeValidity(const Query&, Solver::Validity &result);
+  bool computeValue(const Query&, ref<Expr> &result);
+  bool computeInitialValues(const Query& query,
+                            const std::vector<const Array*> &objects,
+                            std::vector< std::vector<unsigned char> > &values,
+                            bool &hasSolution);
+  SolverRunStatus getOperationStatusCode();
+  std::string getConstraintLog(const Query&) override;
+  void setCoreSolverTimeout(time::Span timeout);
+  
+  static std::unique_ptr<std::list<IndependentElementSet>> getAllIndependentConstraintsSets(const Query &query);
+};
+  
 // Breaks down a constraint into all of it's individual pieces, returning a
 // list of IndependentElementSets or the independent factors.
-static std::unique_ptr<std::list<IndependentElementSet>>
-getAllIndependentConstraintsSets(const Query &query) {
+std::unique_ptr<std::list<IndependentElementSet>>
+IndependentSolver::getAllIndependentConstraintsSets(const Query &query) {
   std::list<IndependentElementSet> *factors = new std::list<IndependentElementSet>();
   ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr);
   if (CE) {
@@ -387,26 +409,6 @@ void calculateArrayReferences(const IndependentElementSet & ie,
   }
 }
 
-class IndependentSolver : public SolverImpl {
-private:
-  std::unique_ptr<Solver> solver;
-
-public:
-  IndependentSolver(std::unique_ptr<Solver> solver)
-      : solver(std::move(solver)) {}
-
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query& query,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
-  SolverRunStatus getOperationStatusCode();
-  std::string getConstraintLog(const Query&) override;
-  void setCoreSolverTimeout(time::Span timeout);
-};
-  
 bool IndependentSolver::computeValidity(const Query& query,
                                         Solver::Validity &result) {
   std::vector< ref<Expr> > required;
