@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <sstream>
+#include <string>
 #include <utility>
 
 using namespace klee;
@@ -47,6 +48,34 @@ class SMTLIBLoggingSolver : public QueryLoggingSolver
                         }
 
                         printer.generateOutput();
+
+                        if (QueryInputFile != "") {
+                                std::istringstream contentsStream(contents);
+                                std::string receivedLine;
+                                while (std::getline(contentsStream, receivedLine)) {
+                                        if (receivedLine.empty() || receivedLine.front() == ';') {
+                                                continue;
+                                        }
+                                        std::string expectedLine;
+                                        bool found = false;
+                                        while (!found && std::getline(queryStream, expectedLine)) {
+                                                if (expectedLine.empty() || expectedLine.front() == ';') {
+                                                        continue;
+                                                }
+                                                found = true;
+                                        }
+                                        if (!found) {
+                                                klee_warning("Reached end of query input file");
+                                        } else if (receivedLine != expectedLine) {
+                                                klee_warning("Expected: %s", expectedLine.c_str());
+                                                klee_warning("Received: %s", receivedLine.c_str());
+                                                klee_error("Mismatch with query input file");
+                                        }
+                                }
+                        }
+
+                        *fos << contents; // Output query to file.
+                        contents.clear();
                 }    
 
 public:
