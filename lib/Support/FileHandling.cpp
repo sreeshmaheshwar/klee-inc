@@ -20,6 +20,20 @@
 
 namespace klee {
 
+std::unique_ptr<llvm::MemoryBuffer>
+klee_open_input_file(const std::string &path, std::string &error) {
+  error.clear();
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> bufferOrError =
+      llvm::MemoryBuffer::getFile(path, true);
+  
+  if (!bufferOrError) {
+    error = bufferOrError.getError().message();
+    return nullptr;
+  }
+  
+  return std::move(bufferOrError.get());
+}
+
 std::unique_ptr<llvm::raw_fd_ostream>
 klee_open_output_file(const std::string &path, std::string &error) {
   error.clear();

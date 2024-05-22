@@ -40,6 +40,8 @@ extern llvm::cl::opt<bool> DebugValidateSolver;
 
 extern llvm::cl::opt<std::string> MinQueryTimeToLog;
 
+extern llvm::cl::opt<std::string> QueryInputFile;
+
 extern llvm::cl::opt<bool> LogTimedOutQueries;
 
 extern llvm::cl::opt<std::string> MaxCoreSolverTime;

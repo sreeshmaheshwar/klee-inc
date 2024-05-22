@@ -29,6 +29,7 @@ class QueryLoggingSolver : public SolverImpl {
 
 protected:
   std::unique_ptr<Solver> solver;
+  std::string contents;
   std::unique_ptr<llvm::raw_ostream> os;
   // @brief Buffer used by logBuffer
   std::string BufferString;

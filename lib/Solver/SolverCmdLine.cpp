@@ -68,6 +68,11 @@ cl::opt<std::string> MinQueryTimeToLog(
              "Only queries longer than threshold will be logged. (default=0s)"),
     cl::cat(SolvingCat));
 
+cl::opt<std::string> QueryInputFile(
+    "query-input-file", cl::init(""),
+    cl::desc("Set the file to read queries from. (default=\"\" (off))"),
+    cl::cat(SolvingCat));
+
 cl::opt<bool>
     LogTimedOutQueries("log-timed-out-queries", cl::init(true),
                        cl::desc("Log queries that timed out. (default=true)."),

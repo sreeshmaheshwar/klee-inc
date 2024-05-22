@@ -10,8 +10,12 @@
 #include "QueryLoggingSolver.h"
 
 #include "klee/Expr/ExprSMTLIBPrinter.h"
+#include "klee/Support/FileHandling.h"
+#include "klee/Solver/SolverCmdLine.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include <memory>
+#include <sstream>
 #include <utility>
 
 using namespace klee;
@@ -21,6 +25,7 @@ using namespace klee;
 class SMTLIBLoggingSolver : public QueryLoggingSolver
 {
         private:
+                std::istringstream queryStream;
                 ExprSMTLIBPrinter printer;
 
                 virtual void printQuery(const Query& query,
@@ -51,6 +56,15 @@ public:
                            queryTimeToLog, logTimedOut) {
     // Setup the printer
     printer.setOutput(logBuffer);
+        if (QueryInputFile != "") {
+                std::string error;
+                auto buffer = klee_open_input_file(QueryInputFile, error);
+                if (!buffer) {
+                        klee_error("Error opening query input file: %s", error.c_str());
+                }
+                std::string content = buffer->getBuffer().str();
+                queryStream.str(content);
+        }
   }
 };
 
