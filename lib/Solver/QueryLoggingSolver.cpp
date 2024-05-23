@@ -181,11 +181,18 @@ bool QueryLoggingSolver::computeValue(const Query &query, ref<Expr> &result) {
     unsigned width;
     std::string e;
     *valis >> width >> e;
-    result = ConstantExpr::fromString(width, e);
-    klee_warning("width: %d, e: %s", width, e.c_str());
-  }
 
-  if (valos) {
+    std::string s;
+    auto ce = cast<ConstantExpr>(result);
+    ce->toString(s);
+
+    // ConstantExpr::fromString(width, e)->dump();
+    // result = ConstantExpr::fromString(width, e);
+
+    if (e != s) {
+      klee_warning("Value mismatch: %s != %s", e.c_str(), s.c_str());
+    }
+  } else if (valos) { // TODO.
     auto ce = cast<ConstantExpr>(result);
     std::string e;
     ce->toString(e);
