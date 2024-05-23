@@ -18,6 +18,8 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <memory>
+#include <sstream>
+#include <string>
 
 using namespace klee;
 
@@ -30,6 +32,10 @@ class QueryLoggingSolver : public SolverImpl {
 protected:
   std::unique_ptr<Solver> solver;
   std::unique_ptr<llvm::raw_ostream> os;
+
+  std::unique_ptr<std::istringstream> valis;
+  std::unique_ptr<llvm::raw_ostream> valos;
+
   // @brief Buffer used by logBuffer
   std::string BufferString;
   // @brief buffer to store logs before flushing to file

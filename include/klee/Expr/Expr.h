@@ -1095,6 +1095,8 @@ public:
     return alloc(v, w);
   }
 
+  static ref<ConstantExpr> fromString(Width width, const std::string &s, unsigned radix = 10);
+
   static bool classof(const Expr *E) { return E->getKind() == Expr::Constant; }
   static bool classof(const ConstantExpr *) { return true; }
 

@@ -23,6 +23,16 @@ llvm::cl::opt<bool> DumpPartialQueryiesEarly(
     llvm::cl::desc("Log queries before calling the solver (default=false)"),
     llvm::cl::cat(klee::SolvingCat));
 
+llvm::cl::opt<std::string> ValueInputFile(
+    "value-input-file", llvm::cl::init(""),
+    llvm::cl::desc("Set the file to read values from. (default=\"\" (off))"),
+    llvm::cl::cat(SolvingCat));
+
+llvm::cl::opt<std::string> ValueOutputFile(
+    "value-output-file", llvm::cl::init(""),
+    llvm::cl::desc("Set the file to print values to. (default=\"\" (off))"),
+    llvm::cl::cat(SolvingCat));
+
 #ifdef HAVE_ZLIB_H
 llvm::cl::opt<bool> CreateCompressedQueryLog(
     "compress-query-log", llvm::cl::init(false),
@@ -54,6 +64,23 @@ QueryLoggingSolver::QueryLoggingSolver(std::unique_ptr<Solver> solver,
     klee_error("Could not open file %s : %s", path.c_str(), error.c_str());
   }
   assert(this->solver);
+
+  if (!ValueInputFile.empty()) {
+    std::string error;
+    auto buffer = klee_open_input_file(ValueInputFile, error);
+    if (!buffer) {
+      klee_error("Could not open file %s : %s", ValueInputFile.c_str(), error.c_str());
+    }
+    valis = std::make_unique<std::istringstream>(buffer->getBuffer().str());
+  }
+
+  if (!ValueOutputFile.empty()) {
+    std::string error;
+    valos = klee_open_output_file(ValueOutputFile, error);
+    if (!valos) {
+      klee_error("Could not open file %s : %s", ValueOutputFile.c_str(), error.c_str());
+    }
+  }
 }
 
 void QueryLoggingSolver::flushBufferConditionally(bool writeToFile) {
@@ -149,6 +176,21 @@ bool QueryLoggingSolver::computeValue(const Query &query, ref<Expr> &result) {
   startQuery(query, "Value", &withFalse);
 
   bool success = solver->impl->computeValue(query, result);
+
+  if (valis) {
+    unsigned width;
+    std::string e;
+    *valis >> width >> e;
+    result = ConstantExpr::fromString(width, e);
+    klee_warning("width: %d, e: %s", width, e.c_str());
+  }
+
+  if (valos) {
+    auto ce = cast<ConstantExpr>(result);
+    std::string e;
+    ce->toString(e);
+    *valos << ce->getWidth() << " " << e << "\n";
+  }
 
   finishQuery(success);
 

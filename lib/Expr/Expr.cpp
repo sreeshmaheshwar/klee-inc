@@ -12,6 +12,7 @@
 #include "klee/Config/Version.h"
 #include "klee/Expr/ExprPPrinter.h"
 #include "klee/Support/OptionCategories.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Hashing.h"
@@ -370,8 +371,13 @@ void ConstantExpr::toString(std::string &Res, unsigned radix) const {
 #if LLVM_VERSION_CODE >= LLVM_VERSION(13, 0)
   Res = llvm::toString(value, radix, false);
 #else
+  klee_error("Let's prefer LLVM API for serialisation / deserialisation");
   Res = value.toString(radix, false);
 #endif
+}
+
+ref<ConstantExpr> ConstantExpr::fromString(Width width, const std::string &s, unsigned radix) {
+  return ConstantExpr::alloc(APInt(width, s, radix));
 }
 
 ref<ConstantExpr> ConstantExpr::Concat(const ref<ConstantExpr> &RHS) {
