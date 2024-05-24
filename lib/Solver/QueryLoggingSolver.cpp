@@ -187,7 +187,9 @@ bool QueryLoggingSolver::computeValue(const Query &query, ref<Expr> &result) {
     ce->toString(s);
 
     // ConstantExpr::fromString(width, e)->dump();
-    // result = ConstantExpr::fromString(width, e);
+    // auto negated = ce->Neg();
+    // result = negated->Neg();
+    result = ConstantExpr::fromString(width, e);
 
     if (e != s) {
       klee_warning("Value mismatch: %s != %s", e.c_str(), s.c_str());
