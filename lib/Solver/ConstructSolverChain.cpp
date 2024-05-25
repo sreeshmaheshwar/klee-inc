@@ -16,6 +16,8 @@
 #include "klee/Support/ErrorHandling.h"
 #include "klee/System/Time.h"
 
+#include "Z3LCPSolver.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 #include <memory>
@@ -46,6 +48,9 @@ std::unique_ptr<Solver> constructSolverChain(
                  baseSolverQuerySMT2LogPath.c_str());
   }
 
+  if (UseIncrementalSolver)
+    solver = std::make_unique<Z3LCPSolver>();
+
   if (UseAssignmentValidatingSolver)
     solver = createAssignmentValidatingSolver(std::move(solver));
 
@@ -62,7 +67,7 @@ std::unique_ptr<Solver> constructSolverChain(
     solver = createIndependentSolver(std::move(solver));
 
   if (DebugValidateSolver)
-    solver = createValidatingSolver(std::move(solver), rawCoreSolver, false);
+    solver = createValidatingSolver(std::move(solver), rawCoreSolver, false); // NOTE: Uses Z3Solver as the oracle.
 
   if (QueryLoggingOptions.isSet(ALL_KQUERY)) {
     solver = createKQueryLoggingSolver(std::move(solver), queryKQueryLogPath,
