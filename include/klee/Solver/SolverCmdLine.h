@@ -52,6 +52,14 @@ extern llvm::cl::opt<bool> CoreSolverOptimizeDivides;
 
 extern llvm::cl::opt<bool> UseAssignmentValidatingSolver;
 
+extern llvm::cl::opt<std::string> Z3LogInteractionFile;
+
+extern llvm::cl::opt<std::string> Z3QueryDumpFile;
+
+extern llvm::cl::opt<bool> Z3ValidateModels;
+
+extern llvm::cl::opt<unsigned> Z3VerbosityLevel;
+
 /// The different query logging solvers that can be switched on/off
 enum QueryLoggingSolverType {
   ALL_KQUERY,    ///< Log all queries in .kquery (KQuery) format
@@ -62,7 +70,7 @@ enum QueryLoggingSolverType {
 
 extern llvm::cl::bits<QueryLoggingSolverType> QueryLoggingOptions;
 
-enum CoreSolverType {
+enum CoreSolverType { // TODO: Include LCP-PP here instead.
   STP_SOLVER,
   METASMT_SOLVER,
   DUMMY_SOLVER,

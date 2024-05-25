@@ -24,34 +24,11 @@
 #include "klee/Expr/ExprUtil.h"
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverImpl.h"
+#include "klee/Solver/SolverCmdLine.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <memory>
-
-namespace {
-// NOTE: Very useful for debugging Z3 behaviour. These files can be given to
-// the z3 binary to replay all Z3 API calls using its `-log` option.
-llvm::cl::opt<std::string> Z3LogInteractionFile(
-    "debug-z3-log-api-interaction", llvm::cl::init(""),
-    llvm::cl::desc("Log API interaction with Z3 to the specified path"),
-    llvm::cl::cat(klee::SolvingCat));
-
-llvm::cl::opt<std::string> Z3QueryDumpFile(
-    "debug-z3-dump-queries", llvm::cl::init(""),
-    llvm::cl::desc("Dump Z3's representation of the query to the specified path"),
-    llvm::cl::cat(klee::SolvingCat));
-
-llvm::cl::opt<bool> Z3ValidateModels(
-    "debug-z3-validate-models", llvm::cl::init(false),
-    llvm::cl::desc("When generating Z3 models validate these against the query"),
-    llvm::cl::cat(klee::SolvingCat));
-
-llvm::cl::opt<unsigned>
-    Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
-                     llvm::cl::desc("Z3 verbosity level (default=0)"),
-                     llvm::cl::cat(klee::SolvingCat));
-}
 
 #include "llvm/Support/ErrorHandling.h"
 
@@ -59,7 +36,6 @@ namespace klee {
 
 class Z3SolverImpl : public SolverImpl {
 private:
-  ConstraintSet assertionStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
