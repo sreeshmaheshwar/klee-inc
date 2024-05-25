@@ -10,6 +10,7 @@
 #include "klee/Expr/Constraints.h"
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverImpl.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include <memory>
 #include <utility>
@@ -51,7 +52,7 @@ bool ValidatingSolver::computeTruth(const Query &query, bool &isValid) {
     return false;
 
   if (isValid != answer)
-    assert(0 && "invalid solver result (computeTruth)");
+		klee_error("Assertion failed");
 
   return true;
 }
@@ -66,7 +67,7 @@ bool ValidatingSolver::computeValidity(const Query &query,
     return false;
 
   if (result != answer)
-    assert(0 && "invalid solver result (computeValidity)");
+		klee_error("Assertion failed");
 
   return true;
 }
@@ -83,7 +84,7 @@ bool ValidatingSolver::computeValue(const Query &query, ref<Expr> &result) {
     return false;
 
   if (answer)
-    assert(0 && "invalid solver result (computeValue)");
+		klee_error("Assertion failed");
 
   return true;
 }
@@ -119,12 +120,12 @@ bool ValidatingSolver::computeInitialValues(
     if (!oracle->impl->computeTruth(Query(bindings, constraints), answer))
       return false;
     if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
+		  klee_error("Assertion failed");
   } else {
     if (!oracle->impl->computeTruth(query, answer))
       return false;
     if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
+		  klee_error("Assertion failed");
   }
 
   return true;
