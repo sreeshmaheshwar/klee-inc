@@ -85,6 +85,8 @@ bool ValidatingSolver::computeValue(const Query &query, ref<Expr> &result) {
 
   if (answer)
 		klee_error("Assertion failed");
+  else
+    klee_warning("Validating Solver reports that value is valid");
 
   return true;
 }
