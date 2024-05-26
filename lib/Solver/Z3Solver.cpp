@@ -149,7 +149,7 @@ Z3SolverImpl::Z3SolverImpl(bool actualSolver)
   timeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "timeout");
   setCoreSolverTimeout(timeout); // TODO: Set incremental solver timeout?
 
-  if (!Z3QueryDumpFile.empty()) {
+  if (!actualSolver && !Z3QueryDumpFile.empty()) {
     std::string error;
     dumpedQueriesFile = klee_open_output_file(Z3QueryDumpFile, error);
     if (!dumpedQueriesFile) {
@@ -168,7 +168,7 @@ Z3SolverImpl::Z3SolverImpl(bool actualSolver)
     Z3_global_param_set("verbose", underlyingString.c_str());
   }
 
-  if (BasicStackSolver || GlobalIncrementalBaseline || LcpPpSolver) {
+  if (actualSolver && (BasicStackSolver || GlobalIncrementalBaseline || LcpPpSolver)) {
     z3Solver = Z3_mk_solver(builder->ctx);
     Z3_solver_inc_ref(builder->ctx, z3Solver);
     Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
@@ -180,7 +180,7 @@ Z3SolverImpl::Z3SolverImpl(bool actualSolver)
 }
 
 Z3SolverImpl::~Z3SolverImpl() {
-  if (BasicStackSolver || GlobalIncrementalBaseline || LcpPpSolver) {
+  if (loggingSolver && (BasicStackSolver || GlobalIncrementalBaseline || LcpPpSolver)) {
     Z3_solver_dec_ref(builder->ctx, z3Solver);
   }
   Z3_params_dec_ref(builder->ctx, solverParameters);
@@ -297,7 +297,9 @@ bool Z3SolverImpl::internalRunSolver(
 
 void Z3SolverImpl::logConstraintSet(const ConstraintSet &constraints, bool expr) {
   assert(!loggingSolver);
-  *dumpedQueriesFile << "; start " << (expr ? "expr" : "constraint set") << "\n";
+  if (dumpedQueriesFile) {
+    *dumpedQueriesFile << "; start " << (expr ? "expr" : "constraint set") << "\n";
+  }
 
   Z3_solver theSolver = Z3_mk_solver(builder->ctx);
 
@@ -327,9 +329,9 @@ void Z3SolverImpl::logConstraintSet(const ConstraintSet &constraints, bool expr)
       *dumpedQueriesFile << "(check-sat)\n";
     }
     dumpedQueriesFile->flush();
-  }
 
-  *dumpedQueriesFile << "; end " << (expr ? "expr" : "constraint set") << "\n\n";
+    *dumpedQueriesFile << "; end " << (expr ? "expr" : "constraint set") << "\n\n";
+  }
 }
 
 void Z3SolverImpl::logSolverFromQuery(const Query &query) {
@@ -834,7 +836,7 @@ void Z3SolverImpl::push() {
     loggingSolver->push();
     Z3_solver_push(builder->ctx, z3Solver); // Propagate down to logging solver.
     assertionStack.emplace_back();
-  } else {
+  } else if (dumpedQueriesFile) {
     *dumpedQueriesFile << "(push)\n";
     dumpedQueriesFile->flush();
   }
@@ -845,7 +847,7 @@ void Z3SolverImpl::pop() {
     loggingSolver->pop(); // Propagate down to logging solver.
     Z3_solver_pop(builder->ctx, z3Solver, 1);
     assertionStack.pop_back();
-  } else {
+  } else if (dumpedQueriesFile) {
     *dumpedQueriesFile << "(pop)\n";
     dumpedQueriesFile->flush();
   }
