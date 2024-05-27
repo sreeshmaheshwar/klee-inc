@@ -946,6 +946,7 @@ void Executor::branch(ExecutionState &state,
       unsigned i;
       for (i=0; i<N; ++i) {
         ref<ConstantExpr> res;
+        klee_warning("Calling getValue in Executor::branch");
         bool success = solver->getValue(
             state.constraints, siit->assignment.evaluate(conditions[i]), res,
             state.queryMetaData);
@@ -1019,6 +1020,7 @@ ref<Expr> Executor::maxStaticPctChecks(ExecutionState &current,
   if (reached_max_fork_limit || reached_max_cp_fork_limit ||
       reached_max_solver_limit || reached_max_cp_solver_limit) {
     ref<klee::ConstantExpr> value;
+    klee_warning("Calling getValue in Executor::maxStaticPctChecks");
     bool success = solver->getValue(current.constraints, condition, value,
                                     current.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
@@ -1106,6 +1108,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
     for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
            siie = it->second.end(); siit != siie; ++siit) {
       ref<ConstantExpr> res;
+      klee_warning("Calling getValue in Executor::fork");
       bool success = solver->getValue(current.constraints,
                                       siit->assignment.evaluate(condition), res,
                                       current.queryMetaData);
@@ -1168,6 +1171,7 @@ Executor::StatePair Executor::fork(ExecutionState &current, ref<Expr> condition,
       for (std::vector<SeedInfo>::iterator siit = seeds.begin(), 
              siie = seeds.end(); siit != siie; ++siit) {
         ref<ConstantExpr> res;
+        klee_warning("Calling getValue in Executor::fork, seeds");
         bool success = solver->getValue(current.constraints,
                                         siit->assignment.evaluate(condition),
                                         res, current.queryMetaData);
@@ -1302,6 +1306,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     bool isTrue = false;
     e = optimizer.optimizeExpr(e, true);
     solver->setTimeout(coreSolverTimeout);
+    klee_warning("Calling getValue in Executor::toUnique");
     if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
       ref<Expr> cond = EqExpr::create(e, value);
       cond = optimizer.optimizeExpr(cond, false);
@@ -1326,6 +1331,7 @@ ref<klee::ConstantExpr> Executor::toConstant(ExecutionState &state, ref<Expr> e,
   /* If no seed evaluation results in a constant, call the solver */
   ref<ConstantExpr> cvalue = getValueFromSeeds(state, e);
   if (!cvalue) {
+    klee_warning("Calling getValue in Executor::toConstant");
     [[maybe_unused]] bool success =
         solver->getValue(state.constraints, e, cvalue, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
@@ -1372,6 +1378,7 @@ void Executor::executeGetValue(ExecutionState &state,
   if (it==seedMap.end() || isa<ConstantExpr>(e)) {
     ref<ConstantExpr> value;
     e = optimizer.optimizeExpr(e, true);
+    klee_warning("Calling getValue in Executor::executeGetValue");
     bool success =
         solver->getValue(state.constraints, e, value, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
@@ -1384,6 +1391,7 @@ void Executor::executeGetValue(ExecutionState &state,
       ref<Expr> cond = siit->assignment.evaluate(e);
       cond = optimizer.optimizeExpr(cond, true);
       ref<ConstantExpr> value;
+      klee_warning("Calling getValue in Executor::executeGetValue, seeds");
       bool success =
           solver->getValue(state.constraints, cond, value, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
@@ -2524,6 +2532,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       do {
         v = optimizer.optimizeExpr(v, true);
         ref<ConstantExpr> value;
+        klee_warning("Calling getValue in executeInstruction");
         bool success =
             solver->getValue(free->constraints, v, value, free->queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");
@@ -3715,6 +3724,7 @@ std::string Executor::getAddressInfo(ExecutionState &state,
     example = CE->getZExtValue();
   } else {
     ref<ConstantExpr> value;
+    klee_warning("Calling getValue in Executor::getAddressInfo");
     bool success = solver->getValue(state.constraints, address, value,
                                     state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");
@@ -4256,6 +4266,7 @@ void Executor::executeAlloc(ExecutionState &state,
     // Check if in seed mode, then try to replicate size from a seed
     ref<ConstantExpr> example = getValueFromSeeds(state, size);
     if (!example) {
+      klee_warning("Calling getValue in Executor::executeAlloc");
       bool success = solver->getValue(state.constraints, size, example,
                                       state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
@@ -4282,6 +4293,7 @@ void Executor::executeAlloc(ExecutionState &state,
     if (fixedSize.second) { 
       // Check for exactly two values
       ref<ConstantExpr> tmp;
+      klee_warning("Calling getValue in Executor::executeAlloc, second time");
       bool success = solver->getValue(fixedSize.second->constraints, size, tmp,
                                       fixedSize.second->queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");      
