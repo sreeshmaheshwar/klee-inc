@@ -1,4 +1,4 @@
-//===-- Z3Solver.h
+//===-- Z3LCPSolver.h
 //---------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
@@ -14,28 +14,11 @@
 #include "klee/Solver/Solver.h"
 
 namespace klee {
-
-// namespace z3_options {
-
-// // NOTE: Very useful for debugging Z3 behaviour. These files can be given to
-// // the z3 binary to replay all Z3 API calls using its `-log` option.
-// extern llvm::cl::opt<std::string> Z3LogInteractionFile;
-
-// extern llvm::cl::opt<std::string> Z3QueryDumpFile;
-
-// extern llvm::cl::opt<bool> Z3ValidateModels;
-
-// extern llvm::cl::opt<unsigned> Z3VerbosityLevel;
-
-// } // namespace z3_options
-
-// using namespace z3_options;
-
-/// Z3Solver - A complete solver based on Z3
-class Z3Solver : public Solver {
+/// Z3LCPSolver - A complete, incremental solver based on Z3
+class Z3LCPSolver : public Solver {
 public:
-  /// Z3Solver - Construct a new Z3Solver.
-  Z3Solver();
+  /// Z3LCPSolver - Construct a new Z3LCPSolver.
+  Z3LCPSolver();
 
   /// Get the query in SMT-LIBv2 format.
   /// \return A C-style string. The caller is responsible for freeing this.

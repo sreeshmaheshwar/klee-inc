@@ -62,6 +62,11 @@ cl::opt<bool> DebugValidateSolver(
              "with the results of the core solver (default=false)"),
     cl::cat(SolvingCat));
 
+cl::opt<bool> UseIncrementalSolver(
+    "use-incremental", cl::init(false),
+    cl::desc("Use incremental solving (default=false)"),
+    cl::cat(SolvingCat));
+
 cl::opt<std::string> MinQueryTimeToLog(
     "min-query-time-to-log",
     cl::desc("Set time threshold for queries logged in files. "
@@ -111,6 +116,28 @@ cl::opt<bool> UseAssignmentValidatingSolver(
     "debug-assignment-validating-solver", cl::init(false),
     cl::desc("Debug the correctness of generated assignments (default=false)"),
     cl::cat(SolvingCat));
+
+// NOTE: Very useful for debugging Z3 behaviour. These files can be given to
+// the z3 binary to replay all Z3 API calls using its `-log` option.
+llvm::cl::opt<std::string> Z3LogInteractionFile(
+    "debug-z3-log-api-interaction", llvm::cl::init(""),
+    llvm::cl::desc("Log API interaction with Z3 to the specified path"),
+    llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<std::string> Z3QueryDumpFile(
+    "debug-z3-dump-queries", llvm::cl::init(""),
+    llvm::cl::desc("Dump Z3's representation of the query to the specified path"),
+    llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<bool> Z3ValidateModels(
+    "debug-z3-validate-models", llvm::cl::init(false),
+    llvm::cl::desc("When generating Z3 models validate these against the query"),
+    llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<unsigned>
+    Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
+                     llvm::cl::desc("Z3 verbosity level (default=0)"),
+                     llvm::cl::cat(klee::SolvingCat));
 
 void KCommandLine::KeepOnlyCategories(
     std::set<llvm::cl::OptionCategory *> const &categories) {
