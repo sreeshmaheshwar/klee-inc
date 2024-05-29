@@ -44,6 +44,11 @@ llvm::cl::opt<bool> LCPPP(
     llvm::cl::desc("Use LCP-PP (default=false)"),
     llvm::cl::cat(klee::SolvingCat));
 
+llvm::cl::opt<bool> SatSmt(
+    "sat-smt", llvm::cl::init(false),
+    llvm::cl::desc("Use the sat.smt=true Z3 option (default=false)"),
+    llvm::cl::cat(klee::SolvingCat));
+
 llvm::cl::opt<klee::Z3_TACTIC_KIND> Z3CustomTactic(
     "z3-custom-tactic", llvm::cl::desc("Apply custom Z3 tactic (experimental)"),
     llvm::cl::values(clEnumValN(klee::NONE, "none",
@@ -232,10 +237,13 @@ Z3SolverImpl::Z3SolverImpl()
     Z3_global_param_set("verbose", underlyingString.c_str());
   }
 
-  Z3_global_param_set("sat.smt", "true"); // TODO: Move down, but errors for now.
 
   tacticBuilder = std::make_unique<Z3TacticBuilder>(builder->ctx);
   if (Z3CustomTactic == NONE) {
+    if (SatSmt) {
+      klee_warning("Setting sat.smt=true Z3 option");
+      Z3_global_param_set("sat.smt", "true"); // TODO: Move down, but errors for now.
+    }
     z3Solver = Z3_mk_solver(builder->ctx);
   } else {
     // Try custom tactic
