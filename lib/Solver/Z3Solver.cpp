@@ -33,9 +33,123 @@
 
 namespace klee {
 
+enum Z3_TACTIC_KIND { NONE, ARRAY_ACKERMANNIZE_TO_QFBV };
+
+} // namespace klee
+
+namespace {
+
+llvm::cl::opt<klee::Z3_TACTIC_KIND> Z3CustomTactic(
+    "z3-custom-tactic", llvm::cl::desc("Apply custom Z3 tactic (experimental)"),
+    llvm::cl::values(clEnumValN(klee::NONE, "none",
+                                "Do not use custom tactic (default)"),
+                     clEnumValN(klee::ARRAY_ACKERMANNIZE_TO_QFBV,
+                                "array_ackermannize_to_qfbv",
+                                "Try to ackermannize arrays to reduce to qfbv")),
+    llvm::cl::init(klee::NONE));
+
+}
+
+namespace klee {
+
+// Specialise for Z3_tactic
+template <> inline void Z3NodeHandle<Z3_tactic>::inc_ref(Z3_tactic node) {
+  ::Z3_tactic_inc_ref(context, node);
+}
+template <> inline void Z3NodeHandle<Z3_tactic>::dec_ref(Z3_tactic node) {
+  ::Z3_tactic_dec_ref(context, node);
+}
+typedef Z3NodeHandle<Z3_tactic> Z3TacticHandle;
+template <> void Z3NodeHandle<Z3_tactic>::dump() __attribute__((used));
+template <> void Z3NodeHandle<Z3_tactic>::dump() {
+  // Do nothing for now
+}
+
+// Specialise for Z3_probe
+template <> inline void Z3NodeHandle<Z3_probe>::inc_ref(Z3_probe node) {
+  ::Z3_probe_inc_ref(context, node);
+}
+template <> inline void Z3NodeHandle<Z3_probe>::dec_ref(Z3_probe node) {
+  ::Z3_probe_dec_ref(context, node);
+}
+typedef Z3NodeHandle<Z3_probe> Z3ProbeHandle;
+template <> void Z3NodeHandle<Z3_probe>::dump() __attribute__((used));
+template <> void Z3NodeHandle<Z3_probe>::dump() {
+  // Do nothing for now
+}
+
+template <> inline void Z3NodeHandle<Z3_params>::inc_ref(Z3_params node) {
+  ::Z3_params_inc_ref(context, node);
+}
+template <> inline void Z3NodeHandle<Z3_params>::dec_ref(Z3_params node) {
+  ::Z3_params_dec_ref(context, node);
+}
+template <> void Z3NodeHandle<Z3_params>::dump() __attribute__((used));
+template <> void Z3NodeHandle<Z3_params>::dump() {
+  llvm::errs() << "Z3ParamsHandle: " << ::Z3_params_to_string(context, node)
+               << "\n";
+}
+
+class Z3ParamsHandle : public Z3NodeHandle<Z3_params> {
+public:
+  // HACK: Actually needs C++11 to work. gcc is lenient though.
+  // Inherit constructors
+  using Z3NodeHandle<Z3_params>::Z3NodeHandle;
+
+  void setBool(const char *name, bool value) {
+    Z3_symbol sym = ::Z3_mk_string_symbol(context, name);
+    ::Z3_params_set_bool(context, node, sym, value);
+  }
+  void setUInt(const char *name, unsigned value) {
+    Z3_symbol sym = ::Z3_mk_string_symbol(context, name);
+    ::Z3_params_set_uint(context, node, sym, value);
+  }
+};
+
+class Z3TacticBuilder {
+private:
+  Z3_context ctx;
+
+public:
+  Z3TacticBuilder(Z3_context ctx) : ctx(ctx) {}
+
+  Z3ProbeHandle mk_probe(const char *name) {
+    return Z3ProbeHandle(::Z3_mk_probe(ctx, name), ctx);
+  }
+  Z3TacticHandle mk_tactic(const char *name) {
+    return Z3TacticHandle(::Z3_mk_tactic(ctx, name), ctx);
+  }
+  Z3TacticHandle mk_tactic(const char *name, Z3ParamsHandle params) {
+    return Z3TacticHandle(
+        ::Z3_tactic_using_params(
+            ctx, Z3TacticHandle(::Z3_mk_tactic(ctx, name), ctx), params),
+        ctx);
+  }
+
+  // Combinators
+  Z3TacticHandle mk_and_then(Z3TacticHandle a, Z3TacticHandle b) {
+    return Z3TacticHandle(::Z3_tactic_and_then(ctx, a, b), ctx);
+  }
+  Z3TacticHandle mk_or_else(Z3TacticHandle a, Z3TacticHandle b) {
+    return Z3TacticHandle(::Z3_tactic_or_else(ctx, a, b), ctx);
+  }
+  // TODO add others
+
+  Z3TacticHandle mk_fail() {
+    return Z3TacticHandle(::Z3_tactic_fail(ctx), ctx);
+  }
+
+  Z3TacticHandle mk_cond(Z3ProbeHandle probe, Z3TacticHandle applyIfTrue,
+                         Z3TacticHandle applyIfFalse) {
+    return Z3TacticHandle(
+        ::Z3_tactic_cond(ctx, probe, applyIfTrue, applyIfFalse), ctx);
+  }
+};
+
 class Z3SolverImpl : public SolverImpl {
 private:
   std::unique_ptr<Z3Builder> builder;
+  std::unique_ptr<Z3TacticBuilder> tacticBuilder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
   std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
@@ -48,6 +162,7 @@ private:
                          std::vector<std::vector<unsigned char> > *values,
                          bool &hasSolution);
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
+  Z3TacticHandle mk_tactic(Z3_TACTIC_KIND tacticKind);
 
 public:
   Z3SolverImpl();
@@ -109,6 +224,8 @@ Z3SolverImpl::Z3SolverImpl()
     ss.flush();
     Z3_global_param_set("verbose", underlyingString.c_str());
   }
+
+  tacticBuilder = std::make_unique<Z3TacticBuilder>(builder->ctx);
 }
 
 Z3SolverImpl::~Z3SolverImpl() {
@@ -225,7 +342,15 @@ bool Z3SolverImpl::internalRunSolver(
   //
   // TODO: Investigate using a custom tactic as described in
   // https://github.com/klee/klee/issues/653
-  Z3_solver theSolver = Z3_mk_solver(builder->ctx);
+  Z3_solver theSolver = NULL;
+  if (Z3CustomTactic == NONE) {
+    theSolver = Z3_mk_solver(builder->ctx);
+  } else {
+    // Try custom tactic
+    Z3TacticHandle customTactic = mk_tactic(Z3CustomTactic);
+    theSolver = Z3_mk_solver_from_tactic(builder->ctx, customTactic);
+  }
+
   Z3_solver_inc_ref(builder->ctx, theSolver);
   Z3_solver_set_params(builder->ctx, theSolver, solverParameters);
 
@@ -431,6 +556,43 @@ bool Z3SolverImpl::validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel)
 
   Z3_ast_vector_dec_ref(builder->ctx, constraints);
   return success;
+}
+
+Z3TacticHandle Z3SolverImpl::mk_tactic(Z3_TACTIC_KIND tacticKind) {
+  switch (tacticKind) {
+  case NONE:
+    return Z3TacticHandle();
+  case ARRAY_ACKERMANNIZE_TO_QFBV: {
+    // FIXME: This api sucks
+    Z3ParamsHandle bvarray2ufParams(::Z3_mk_params(builder->ctx), builder->ctx);
+    // FIXME: find out if this parameter matters
+    bvarray2ufParams.setBool("produce_models", true);
+    Z3ParamsHandle ackermannize_bvParams(::Z3_mk_params(builder->ctx),
+                                         builder->ctx);
+    // FIXME: Figure out what this should be. See
+    // https://github.com/Z3Prover/z3/issues/1150#issuecomment-315855610
+    ackermannize_bvParams.setUInt("div0_ackermann_limit", 1000000);
+    // FIXME: This is clumsy we should give the Z3TacticHandle additional
+    // operations so it has a "fluent" API.
+    Z3TacticHandle t = tacticBuilder->mk_or_else(
+        tacticBuilder->mk_and_then(
+            tacticBuilder->mk_tactic("simplify"),
+            tacticBuilder->mk_and_then(
+                tacticBuilder->mk_tactic("bvarray2uf", bvarray2ufParams),
+                tacticBuilder->mk_and_then(
+                    tacticBuilder->mk_tactic("ackermannize_bv",
+                                             ackermannize_bvParams),
+                    tacticBuilder->mk_cond(tacticBuilder->mk_probe("is-qfbv"),
+                                           tacticBuilder->mk_tactic("qfbv"),
+                                           tacticBuilder->mk_fail())))
+
+                ),
+        tacticBuilder->mk_tactic("qfaufbv"));
+    return t;
+  }
+  default:
+    llvm_unreachable("Unhandled tactic type");
+  }
 }
 
 SolverImpl::SolverRunStatus Z3SolverImpl::getOperationStatusCode() {
