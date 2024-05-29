@@ -62,9 +62,9 @@ cl::opt<bool> DebugValidateSolver(
              "with the results of the core solver (default=false)"),
     cl::cat(SolvingCat));
 
-cl::opt<bool> UseIncrementalSolver(
-    "use-incremental", cl::init(false),
-    cl::desc("Use incremental solving (default=false)"),
+cl::opt<bool> UseSolver2(
+    "use-solver-2", cl::init(false),
+    cl::desc("Use Z3's solver2 (default=false)"),
     cl::cat(SolvingCat));
 
 cl::opt<std::string> MinQueryTimeToLog(

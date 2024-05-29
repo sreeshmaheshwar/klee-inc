@@ -13,6 +13,7 @@
 
 #include "klee/Solver/Solver.h"
 
+// TODO: Rename this to Z3GlobalSolver2.
 namespace klee {
 /// Z3LCPSolver - A complete, incremental solver based on Z3
 class Z3LCPSolver : public Solver {

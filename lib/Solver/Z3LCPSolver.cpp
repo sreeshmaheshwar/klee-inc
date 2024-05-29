@@ -36,7 +36,6 @@ namespace klee {
 
 class Z3LCPSolverImpl : public SolverImpl {
 private:
-  ConstraintSet::constraints_ty assertionStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
@@ -46,10 +45,6 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
 
-  bool internalRunSolverGlobal(const Query &,
-                               const std::vector<const Array *> *objects,
-                               std::vector<std::vector<unsigned char> > *values,
-                               bool &hasSolution);
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
@@ -175,7 +170,7 @@ std::string Z3LCPSolverImpl::getConstraintLog(const Query &query) {
                                         assumptions.cend()};
   ::Z3_string result = Z3_benchmark_to_smtlib_string(
       temp_builder.ctx,
-      /*name=*/"Emited by klee::Z3SolverImpl::getConstraintLog()",
+      /*name=*/"Emited by klee::Z3LCPSolverImpl::getConstraintLog()",
       /*logic=*/"",
       /*status=*/"unknown",
       /*attributes=*/"",
@@ -232,59 +227,21 @@ bool Z3LCPSolverImpl::internalRunSolver(
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
-  auto stack_it = assertionStack.begin();
-  auto query_it = query.constraintsToWrite.begin();
-  // LCP between the assertion stack and the query constraints.
-  while (stack_it != assertionStack.end() && query_it != query.constraintsToWrite.end() && !(*stack_it)->compare(*(*query_it))) {
-    ++stack_it;
-    ++query_it;
-    ++stats::commonConstraints;
+  Z3_solver_push(builder->ctx, z3Solver); 
+
+  ConstantArrayFinder constant_arrays_in_query;
+  for (auto const &constraint : query.constraints) {
+    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(constraint));
+    constant_arrays_in_query.visit(constraint);
   }
-
-  // LCP is computed; start the timer.
-  TimerStatIncrementer postLCPIncrementer(stats::postLCPTime);
-
-  // Pop off extra constraints from stack.
-  Z3_solver_pop(builder->ctx, z3Solver, std::distance(stack_it, assertionStack.end()));
-  assertionStack.erase(stack_it, assertionStack.end());
-
-  // Add the remaining query constraints.
-  while (query_it != query.constraintsToWrite.end()) {
-    Z3_solver_push(builder->ctx, z3Solver);
-    assertionStack.push_back(*query_it);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
-
-    ConstantArrayFinder constant_arrays_in_query;
-    constant_arrays_in_query.visit(*query_it);
-    // Add constant array assertions, NB: at the same level, to benefit from
-    // incrementality over them. Downside is that we may assert the same
-    // constraint multiple times.
-    for (auto const &constant_array : constant_arrays_in_query.results) {
-      assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-              "Constant array found in query, but not handled by Z3Builder");
-      for (auto const &arrayIndexValueExpr :
-            builder->constant_array_assertions[constant_array]) {
-        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
-      }
-    }
-
-    ++query_it;
-  }
-
   ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
 
-  // We don't persist the negation of the query expression to the assertion stack;
-  // it is unintuitive that negation would aid future constraint sets.
-  // Push a level for constraints related to the query expression:
-  // TODO: See TODOs from basic-stack.
-  Z3_solver_push(builder->ctx, z3Solver);
   Z3ASTHandle z3QueryExpr =
       Z3ASTHandle(builder->construct(query.expr), builder->ctx);
-
-  ConstantArrayFinder constant_arrays_in_query;
   constant_arrays_in_query.visit(query.expr);
+
   for (auto const &constant_array : constant_arrays_in_query.results) {
     assert(builder->constant_array_assertions.count(constant_array) == 1 &&
            "Constant array found in query, but not handled by Z3Builder");
@@ -323,7 +280,6 @@ bool Z3LCPSolverImpl::internalRunSolver(
   // ``builder->construct()``.
   builder->clearConstructCache();
 
-  // Pop the level relating to the query expression:
   Z3_solver_pop(builder->ctx, z3Solver, 1);
 
   if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||

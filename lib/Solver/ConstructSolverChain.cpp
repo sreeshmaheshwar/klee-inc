@@ -48,8 +48,8 @@ std::unique_ptr<Solver> constructSolverChain(
                  baseSolverQuerySMT2LogPath.c_str());
   }
 
-  if (UseIncrementalSolver)
-    solver = std::make_unique<Z3LCPSolver>();
+  if (UseSolver2)
+    solver = std::make_unique<Z3LCPSolver>(); // TODO: Rename this solver.
 
   if (UseAssignmentValidatingSolver)
     solver = createAssignmentValidatingSolver(std::move(solver));

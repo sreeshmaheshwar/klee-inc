@@ -15,22 +15,6 @@
 
 namespace klee {
 
-// namespace z3_options {
-
-// // NOTE: Very useful for debugging Z3 behaviour. These files can be given to
-// // the z3 binary to replay all Z3 API calls using its `-log` option.
-// extern llvm::cl::opt<std::string> Z3LogInteractionFile;
-
-// extern llvm::cl::opt<std::string> Z3QueryDumpFile;
-
-// extern llvm::cl::opt<bool> Z3ValidateModels;
-
-// extern llvm::cl::opt<unsigned> Z3VerbosityLevel;
-
-// } // namespace z3_options
-
-// using namespace z3_options;
-
 /// Z3Solver - A complete solver based on Z3
 class Z3Solver : public Solver {
 public:
