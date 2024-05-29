@@ -240,12 +240,12 @@ Z3SolverImpl::Z3SolverImpl()
 
   tacticBuilder = std::make_unique<Z3TacticBuilder>(builder->ctx);
   if (Z3CustomTactic == NONE) {
+    z3Solver = Z3_mk_solver(builder->ctx);
+  } else {
     if (SatSmt) {
       klee_warning("Setting sat.smt=true Z3 option");
       Z3_global_param_set("sat.smt", "true"); // TODO: Move down, but errors for now.
     }
-    z3Solver = Z3_mk_solver(builder->ctx);
-  } else {
     // Try custom tactic
     Z3TacticHandle customTactic = mk_tactic(Z3CustomTactic);
     z3Solver = Z3_mk_solver_from_tactic(builder->ctx, customTactic);
