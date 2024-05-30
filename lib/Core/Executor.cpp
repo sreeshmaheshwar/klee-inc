@@ -1298,6 +1298,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
   ref<Expr> result = e;
 
   if (!isa<ConstantExpr>(e)) {
+    klee_warning("toUnique() called on non-constant expression");
     ref<ConstantExpr> value;
     bool isTrue = false;
     e = optimizer.optimizeExpr(e, true);
