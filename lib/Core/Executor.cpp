@@ -1320,8 +1320,10 @@ ref<klee::ConstantExpr> Executor::toConstant(ExecutionState &state, ref<Expr> e,
                                              const std::string &reason,
                                              bool concretize) {
   e = ConstraintManager::simplifyExpr(state.constraints, e);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e)) {
+    klee_warning("Taking fast shortcut out...");
     return CE;
+  }
 
   /* If no seed evaluation results in a constant, call the solver */
   ref<ConstantExpr> cvalue = getValueFromSeeds(state, e);
