@@ -76,7 +76,7 @@ void QueryLoggingSolver::startQuery(const Query &query, const char *typeName,
             << "Type: " << typeName << ", "
             << "Instructions: " << instructions << "\n";
 
-  printQuery(query, falseQuery, objects);
+  // printQuery(query, falseQuery, objects);
 
   if (DumpPartialQueryiesEarly) {
     flushBufferConditionally(true);
@@ -175,27 +175,27 @@ bool QueryLoggingSolver::computeInitialValues(
   if (success) {
     logBuffer << queryCommentSign
               << "   Solvable: " << (hasSolution ? "true" : "false") << "\n";
-    if (hasSolution) {
-      std::vector<std::vector<unsigned char> >::iterator values_it =
-          values.begin();
+    // if (hasSolution) {
+    //   std::vector<std::vector<unsigned char> >::iterator values_it =
+    //       values.begin();
 
-      for (std::vector<const Array *>::const_iterator i = objects.begin(),
-                                                      e = objects.end();
-           i != e; ++i, ++values_it) {
-        const Array *array = *i;
-        std::vector<unsigned char> &data = *values_it;
-        logBuffer << queryCommentSign << "     " << array->name << " = [";
+    //   for (std::vector<const Array *>::const_iterator i = objects.begin(),
+    //                                                   e = objects.end();
+    //        i != e; ++i, ++values_it) {
+    //     const Array *array = *i;
+    //     std::vector<unsigned char> &data = *values_it;
+    //     logBuffer << queryCommentSign << "     " << array->name << " = [";
 
-        for (unsigned j = 0; j < array->size; j++) {
-          logBuffer << (int)data[j];
+    //     for (unsigned j = 0; j < array->size; j++) {
+    //       logBuffer << (int)data[j];
 
-          if (j + 1 < array->size) {
-            logBuffer << ",";
-          }
-        }
-        logBuffer << "]\n";
-      }
-    }
+    //       if (j + 1 < array->size) {
+    //         logBuffer << ",";
+    //       }
+    //     }
+    //     logBuffer << "]\n";
+    //   }
+    // }
   }
   logBuffer << "\n";
 
