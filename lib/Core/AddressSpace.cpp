@@ -88,6 +88,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
     // try cheap search, will succeed for any inbounds pointer
 
     ref<ConstantExpr> cex;
+    klee_warning("Calling getValue in resolveOne");
     if (!solver->getValue(state.constraints, address, cex, state.queryMetaData))
       return false;
     uint64_t example = cex->getZExtValue();
@@ -231,6 +232,7 @@ bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
     // just get this by inspection of the expr.
 
     ref<ConstantExpr> cex;
+    klee_warning("Calling getValue in resolve");
     if (!solver->getValue(state.constraints, p, cex, state.queryMetaData))
       return true;
     uint64_t example = cex->getZExtValue();
