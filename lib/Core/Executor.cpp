@@ -1308,6 +1308,8 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     solver->setTimeout(coreSolverTimeout);
     klee_warning("Calling getValue in Executor::toUnique");
     if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
+      klee_warning("Dumping value:");
+      value->dump();
       ref<Expr> cond = EqExpr::create(e, value);
       cond = optimizer.optimizeExpr(cond, false);
       if (solver->mustBeTrue(state.constraints, cond, isTrue,
