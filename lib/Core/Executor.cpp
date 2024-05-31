@@ -4225,7 +4225,7 @@ void Executor::executeAlloc(ExecutionState &state,
                             bool zeroMemory,
                             const ObjectState *reallocFrom,
                             size_t allocationAlignment) {
-  klee_warnign("Calling toUnique in Executor::executeAlloc");
+  klee_warning("Calling toUnique in Executor::executeAlloc");
   size = toUnique(state, size);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
     const llvm::Value *allocSite = state.prevPC->inst;
