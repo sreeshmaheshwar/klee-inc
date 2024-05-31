@@ -1317,6 +1317,9 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     }
     solver->setTimeout(time::Span());
   }
+
+  klee_warning("Done calling getValue in Executor::toUnique, dumping:");
+  result->dump();
   
   return result;
 }
@@ -2254,6 +2257,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     // implements indirect branch to a label within the current function
     const auto bi = cast<IndirectBrInst>(i);
     auto address = eval(ki, 0, state).value;
+    klee_warning("Calling toUnique in IndirectBr");
     address = toUnique(state, address);
 
     // concrete address
@@ -2330,6 +2334,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     ref<Expr> cond = eval(ki, 0, state).value;
     BasicBlock *bb = si->getParent();
 
+    klee_warning("Calling toUnique in Switch");
     cond = toUnique(state, cond);
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
       // Somewhat gross to create these all the time, but fine till we
@@ -4042,6 +4047,7 @@ void Executor::callExternalFunction(ExecutionState &state, KInstruction *target,
 
       wordIndex += (cvalue->getWidth() + 63) / 64;
     } else {
+      klee_warning("Calling toUnique in Executor::callExternalFunction");
       ref<Expr> arg = toUnique(state, a);
       if (ConstantExpr *ce = dyn_cast<ConstantExpr>(arg)) {
         // fp80 must be aligned to 16 according to the System V AMD 64 ABI
@@ -4219,6 +4225,7 @@ void Executor::executeAlloc(ExecutionState &state,
                             bool zeroMemory,
                             const ObjectState *reallocFrom,
                             size_t allocationAlignment) {
+  klee_warnign("Calling toUnique in Executor::executeAlloc");
   size = toUnique(state, size);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
     const llvm::Value *allocSite = state.prevPC->inst;
