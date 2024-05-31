@@ -107,6 +107,7 @@ namespace klee {
     }
 
     virtual void setCoreSolverTimeout(time::Span timeout) {};
+    virtual void indicateIgnore() {};
 };
 
 }

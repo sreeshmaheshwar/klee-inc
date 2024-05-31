@@ -222,6 +222,10 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query) {
                         ConstantExpr::create(max, width));
 }
 
+void Solver::indicateIgnore() {
+  impl->indicateIgnore();
+}
+
 void Query::dump() const {
   llvm::errs() << "Constraints [\n";
   for (const auto &constraint : constraints)

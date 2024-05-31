@@ -1307,6 +1307,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     e = optimizer.optimizeExpr(e, true);
     solver->setTimeout(coreSolverTimeout);
     klee_warning("Calling getValue in Executor::toUnique");
+    solver->indicateIgnore();
     if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
       klee_warning("Dumping value:");
       value->dump();
@@ -1318,6 +1319,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
         result = value;
     }
     solver->setTimeout(time::Span());
+    solver->indicateIgnore();
   }
 
   klee_warning("Done calling getValue in Executor::toUnique, dumping:");

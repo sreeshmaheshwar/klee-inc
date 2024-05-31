@@ -72,6 +72,8 @@ public:
   std::pair<ref<Expr>, ref<Expr>> getRange(const ConstraintSet &,
                                            ref<Expr> query,
                                            SolverQueryMetaData &metaData);
+
+  void indicateIgnore();
 };
 }
 

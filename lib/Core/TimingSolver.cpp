@@ -139,3 +139,7 @@ TimingSolver::getRange(const ConstraintSet &constraints, ref<Expr> expr,
   metaData.queryCost += timer.delta();
   return result;
 }
+
+void TimingSolver::indicateIgnore() {
+  solver->indicateIgnore();
+}

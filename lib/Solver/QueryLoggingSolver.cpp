@@ -215,3 +215,8 @@ std::string QueryLoggingSolver::getConstraintLog(const Query &query) {
 void QueryLoggingSolver::setCoreSolverTimeout(time::Span timeout) {
   solver->impl->setCoreSolverTimeout(timeout);
 }
+
+void QueryLoggingSolver::indicateIgnore() {
+  logBuffer << queryCommentSign << " Ignore this query\n"; 
+  flushBuffer();
+}

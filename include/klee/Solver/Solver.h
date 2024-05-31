@@ -205,6 +205,7 @@ namespace klee {
     
     virtual std::string getConstraintLog(const Query& query);
     virtual void setCoreSolverTimeout(time::Span timeout);
+    void indicateIgnore();
   };
 
   /* *** */

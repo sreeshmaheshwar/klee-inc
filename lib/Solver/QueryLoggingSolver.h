@@ -73,6 +73,8 @@ public:
   SolverRunStatus getOperationStatusCode();
   std::string getConstraintLog(const Query &) override;
   void setCoreSolverTimeout(time::Span timeout);
+
+  void indicateIgnore() override;
 };
 
 #endif /* KLEE_QUERYLOGGINGSOLVER_H */
