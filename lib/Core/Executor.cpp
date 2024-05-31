@@ -1307,19 +1307,20 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     e = optimizer.optimizeExpr(e, true);
     solver->setTimeout(coreSolverTimeout);
     klee_warning("Calling getValue in Executor::toUnique");
-    solver->indicateIgnore();
     if (solver->getValue(state.constraints, e, value, state.queryMetaData)) {
       klee_warning("Dumping value:");
       value->dump();
       ref<Expr> cond = EqExpr::create(e, value);
       cond = optimizer.optimizeExpr(cond, false);
+      solver->indicateIgnore();
       if (solver->mustBeTrue(state.constraints, cond, isTrue,
                              state.queryMetaData) &&
-          isTrue)
+          isTrue) {
         result = value;
+      }
+      solver->indicateIgnore();
     }
     solver->setTimeout(time::Span());
-    solver->indicateIgnore();
   }
 
   klee_warning("Done calling getValue in Executor::toUnique, dumping:");
