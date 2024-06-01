@@ -15,18 +15,34 @@ using namespace klee;
 SolverImpl::~SolverImpl() {}
 
 bool SolverImpl::computeValidity(const Query &query, Solver::Validity &result) {
+  // Reverse the direction in which we perform these checks, so the negation
+  // of the query expression is already on the assertion stack with `Z3Solver`.
   bool isTrue, isFalse;
-  if (!computeTruth(query, isTrue))
+  if (!computeTruth(query.negateExpr(), isFalse))
     return false;
-  if (isTrue) {
-    result = Solver::True;
+  if (isFalse) {
+    result = Solver::False;
   } else {
-    if (!computeTruth(query.negateExpr(), isFalse))
+    if (!computeTruth(query, isTrue))
       return false;
-    result = isFalse ? Solver::False : Solver::Unknown;
+    result = isTrue ? Solver::True : Solver::Unknown;
   }
   return true;
 }
+
+// bool SolverImpl::computeValidity(const Query &query, Solver::Validity &result) {
+//   bool isTrue, isFalse;
+//   if (!computeTruth(query, isTrue)) // negates the query's expression.
+//     return false;
+//   if (isTrue) {
+//     result = Solver::True;
+//   } else {
+//     if (!computeTruth(query.negateExpr(), isFalse))
+//       return false;
+//     result = isFalse ? Solver::False : Solver::Unknown;
+//   }
+//   return true;
+// }
 
 const char *SolverImpl::getOperationStatusString(SolverRunStatus statusCode) {
   switch (statusCode) {
