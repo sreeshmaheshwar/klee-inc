@@ -338,10 +338,36 @@ bool Z3SolverImpl::internalRunSolver(
 
   auto stack_it = assertionStack.begin();
   auto query_it = query.constraintsToWrite.begin();
+
+  // KLEE Queries are validity queries i.e.
+  // ∀ X Constraints(X) → query(X)
+  // but Z3 works in terms of satisfiability so instead we ask the
+  // negation of the equivalent i.e.
+  // ∃ X Constraints(X) ∧ ¬ query(X)
+  auto negated_exp = Expr::createIsZero(query.expr);
+  bool expr_done = false;
+
+  auto all_written = [&]() -> bool {
+    return query_it == query.constraintsToWrite.end() && expr_done;
+  };
+  auto get_expr_to_write = [&]() {
+    if (query_it == query.constraintsToWrite.end()) {
+      return negated_exp;
+    }
+    return *query_it;
+  };
+  auto advance_expr_to_write = [&]() {
+    if (query_it != query.constraintsToWrite.end()) {
+      ++query_it;
+    } else {
+      expr_done = true;
+    }
+  };
+
   // LCP between the assertion stack and the query constraints.
-  while (stack_it != assertionStack.end() && query_it != query.constraintsToWrite.end() && !(*stack_it)->compare(*(*query_it))) {
+  while (stack_it != assertionStack.end() && !all_written() && !(*stack_it)->compare(*get_expr_to_write())) {
     ++stack_it;
-    ++query_it;
+    advance_expr_to_write();
     ++stats::commonConstraints;
   }
 
@@ -353,13 +379,14 @@ bool Z3SolverImpl::internalRunSolver(
   assertionStack.erase(stack_it, assertionStack.end());
 
   // Add the remaining query constraints.
-  while (query_it != query.constraintsToWrite.end()) {
+  while (!all_written()) {
     Z3_solver_push(builder->ctx, z3Solver);
-    assertionStack.push_back(*query_it);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(*query_it));
+    auto e = get_expr_to_write();
+    assertionStack.push_back(e);
+    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
 
     ConstantArrayFinder constant_arrays_in_query;
-    constant_arrays_in_query.visit(*query_it);
+    constant_arrays_in_query.visit(e);
     // Add constant array assertions, NB: at the same level, to benefit from
     // incrementality over them. Downside is that we may assert the same
     // constraint multiple times.
@@ -372,40 +399,12 @@ bool Z3SolverImpl::internalRunSolver(
       }
     }
 
-    ++query_it;
+    advance_expr_to_write();
   }
 
   ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
-
-  // We don't persist the negation of the query expression to the assertion stack;
-  // it is unintuitive that negation would aid future constraint sets.
-  // Push a level for constraints related to the query expression:
-  // TODO: See TODOs from basic-stack.
-  Z3_solver_push(builder->ctx, z3Solver);
-  Z3ASTHandle z3QueryExpr =
-      Z3ASTHandle(builder->construct(query.expr), builder->ctx);
-
-  ConstantArrayFinder constant_arrays_in_query;
-  constant_arrays_in_query.visit(query.expr);
-  for (auto const &constant_array : constant_arrays_in_query.results) {
-    assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-           "Constant array found in query, but not handled by Z3Builder");
-    for (auto const &arrayIndexValueExpr :
-         builder->constant_array_assertions[constant_array]) {
-      Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
-    }
-  }
-
-  // KLEE Queries are validity queries i.e.
-  // ∀ X Constraints(X) → query(X)
-  // but Z3 works in terms of satisfiability so instead we ask the
-  // negation of the equivalent i.e.
-  // ∃ X Constraints(X) ∧ ¬ query(X)
-  Z3_solver_assert(
-      builder->ctx, z3Solver,
-      Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx));
 
   if (dumpedQueriesFile) {
     *dumpedQueriesFile << "; start Z3 query\n";
@@ -426,9 +425,6 @@ bool Z3SolverImpl::internalRunSolver(
   // ``Query`` rather than only sharing within a single call to
   // ``builder->construct()``.
   builder->clearConstructCache();
-
-  // Pop the level relating to the query expression:
-  Z3_solver_pop(builder->ctx, z3Solver, 1);
 
   if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
       runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
