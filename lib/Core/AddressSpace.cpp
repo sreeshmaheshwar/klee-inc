@@ -88,7 +88,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
     // try cheap search, will succeed for any inbounds pointer
 
     ref<ConstantExpr> cex;
-    if (!solver->getValue(state.constraints, address, cex, state.queryMetaData))
+    if (!solver->getValue(state.constraints, state.unsimplified, address, cex, state.queryMetaData))
       return false;
     uint64_t example = cex->getZExtValue();
     MemoryObject hack(example);
@@ -116,7 +116,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
       const auto &mo = oi->first;
 
       bool mayBeTrue;
-      if (!solver->mayBeTrue(state.constraints,
+      if (!solver->mayBeTrue(state.constraints, state.unsimplified,
                              mo->getBoundsCheckPointer(address), mayBeTrue,
                              state.queryMetaData))
         return false;
@@ -127,7 +127,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
         return true;
       } else {
         bool mustBeTrue;
-        if (!solver->mustBeTrue(state.constraints,
+        if (!solver->mustBeTrue(state.constraints, state.unsimplified,
                                 UgeExpr::create(address, mo->getBaseExpr()),
                                 mustBeTrue, state.queryMetaData))
           return false;
@@ -141,7 +141,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
       const auto &mo = oi->first;
 
       bool mustBeTrue;
-      if (!solver->mustBeTrue(state.constraints,
+      if (!solver->mustBeTrue(state.constraints, state.unsimplified,
                               UltExpr::create(address, mo->getBaseExpr()),
                               mustBeTrue, state.queryMetaData))
         return false;
@@ -150,7 +150,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
       } else {
         bool mayBeTrue;
 
-        if (!solver->mayBeTrue(state.constraints,
+        if (!solver->mayBeTrue(state.constraints, state.unsimplified,
                                mo->getBoundsCheckPointer(address), mayBeTrue,
                                state.queryMetaData))
           return false;
@@ -178,7 +178,7 @@ int AddressSpace::checkPointerInObject(ExecutionState &state,
   const MemoryObject *mo = op.first;
   ref<Expr> inBounds = mo->getBoundsCheckPointer(p);
   bool mayBeTrue;
-  if (!solver->mayBeTrue(state.constraints, inBounds, mayBeTrue,
+  if (!solver->mayBeTrue(state.constraints, state.unsimplified, inBounds, mayBeTrue,
                          state.queryMetaData)) {
     return 1;
   }
@@ -190,7 +190,7 @@ int AddressSpace::checkPointerInObject(ExecutionState &state,
     auto size = rl.size();
     if (size == 1) {
       bool mustBeTrue;
-      if (!solver->mustBeTrue(state.constraints, inBounds, mustBeTrue,
+      if (!solver->mustBeTrue(state.constraints, state.unsimplified, inBounds, mustBeTrue,
                               state.queryMetaData))
         return 1;
       if (mustBeTrue)
@@ -231,7 +231,7 @@ bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
     // just get this by inspection of the expr.
 
     ref<ConstantExpr> cex;
-    if (!solver->getValue(state.constraints, p, cex, state.queryMetaData))
+    if (!solver->getValue(state.constraints, state.unsimplified, p, cex, state.queryMetaData))
       return true;
     uint64_t example = cex->getZExtValue();
     MemoryObject hack(example);
@@ -258,7 +258,7 @@ bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
         return incomplete ? true : false;
 
       bool mustBeTrue;
-      if (!solver->mustBeTrue(state.constraints,
+      if (!solver->mustBeTrue(state.constraints, state.unsimplified,
                               UgeExpr::create(p, mo->getBaseExpr()), mustBeTrue,
                               state.queryMetaData))
         return true;
@@ -273,7 +273,7 @@ bool AddressSpace::resolve(ExecutionState &state, TimingSolver *solver,
         return true;
 
       bool mustBeTrue;
-      if (!solver->mustBeTrue(state.constraints,
+      if (!solver->mustBeTrue(state.constraints, state.unsimplified,
                               UltExpr::create(p, mo->getBaseExpr()), mustBeTrue,
                               state.queryMetaData))
         return true;

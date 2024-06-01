@@ -133,7 +133,8 @@ void ConstraintManager::addConstraintInternal(const ref<Expr> &e) {
   }
 
   case Expr::Eq: {
-    if (RewriteEqualities) {
+    // If the constraint set is explicity unsimplified, do not rewrite.
+    if (!unsimplified && RewriteEqualities) {
       // XXX: should profile the effects of this and the overhead.
       // traversing the constraints looking for equalities is hardly the
       // slowest thing we do, but it is probably nicer to have a
@@ -160,8 +161,8 @@ void ConstraintManager::addConstraint(const ref<Expr> &e) {
   addConstraintInternal(simplified);
 }
 
-ConstraintManager::ConstraintManager(ConstraintSet &_constraints)
-    : constraints(_constraints) {}
+ConstraintManager::ConstraintManager(ConstraintSet &_constraints, bool _unsimplified)
+    : constraints(_constraints), unsimplified(_unsimplified) {}
 
 bool ConstraintSet::empty() const { return constraints.empty(); }
 

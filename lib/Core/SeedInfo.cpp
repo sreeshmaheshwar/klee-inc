@@ -66,6 +66,10 @@ void SeedInfo::patchSeed(const ExecutionState &state,
   ConstraintManager cm(required);
   cm.addConstraint(condition);
 
+  ConstraintSet requiredUnsimp(state.constraints);
+  ConstraintManager cmUnsimp(requiredUnsimp, true);
+  cmUnsimp.addConstraint(condition);
+
   // Try and patch direct reads first, this is likely to resolve the
   // problem quickly and avoids long traversal of all seed
   // values. There are other smart ways to do this, the nicest is if
@@ -93,27 +97,30 @@ void SeedInfo::patchSeed(const ExecutionState &state,
                                                             Expr::Int8));
       bool res;
       bool success =
-          solver->mustBeFalse(required, isSeed, res, state.queryMetaData);
+          solver->mustBeFalse(required, requiredUnsimp, isSeed, res, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
         ref<ConstantExpr> value;
         bool success =
-            solver->getValue(required, read, value, state.queryMetaData);
+            solver->getValue(required, requiredUnsimp, read, value, state.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");            
         (void) success;
         a->second[i] = value->getZExtValue(8);
         cm.addConstraint(EqExpr::create(
             read, ConstantExpr::alloc(a->second[i], Expr::Int8)));
+        cmUnsimp.addConstraint(EqExpr::create(
+            read, ConstantExpr::alloc(a->second[i], Expr::Int8)));
       } else {
         cm.addConstraint(isSeed);
+        cmUnsimp.addConstraint(isSeed);
       }
     }
   }
 
   bool res;
   bool success =
-      solver->mayBeTrue(state.constraints, assignment.evaluate(condition), res,
+      solver->mayBeTrue(state.constraints, state.unsimplified, assignment.evaluate(condition), res,
                         state.queryMetaData);
   assert(success && "FIXME: Unhandled solver failure");
   (void) success;
@@ -133,13 +140,13 @@ void SeedInfo::patchSeed(const ExecutionState &state,
                                                             Expr::Int8));
       bool res;
       bool success =
-          solver->mustBeFalse(required, isSeed, res, state.queryMetaData);
+          solver->mustBeFalse(required, requiredUnsimp, isSeed, res, state.queryMetaData);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (res) {
         ref<ConstantExpr> value;
         bool success =
-            solver->getValue(required, read, value, state.queryMetaData);
+            solver->getValue(required, requiredUnsimp, read, value, state.queryMetaData);
         assert(success && "FIXME: Unhandled solver failure");            
         (void) success;
         it->second[i] = value->getZExtValue(8);
@@ -155,7 +162,7 @@ void SeedInfo::patchSeed(const ExecutionState &state,
   {
     bool res;
     bool success =
-        solver->mayBeTrue(state.constraints, assignment.evaluate(condition),
+        solver->mayBeTrue(state.constraints, state.unsimplified, assignment.evaluate(condition),
                           res, state.queryMetaData);
     assert(success && "FIXME: Unhandled solver failure");            
     (void) success;

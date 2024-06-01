@@ -191,6 +191,9 @@ public:
   /// @brief Constraints collected so far
   ConstraintSet constraints;
 
+  /// @brief Unsimplified constraints collected so far.
+  ConstraintSet unsimplified;
+
   /// Statistics and information
 
   /// @brief Metadata utilized and collected by solvers for this state
