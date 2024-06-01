@@ -102,6 +102,7 @@ ExecutionState::ExecutionState(const ExecutionState& state):
     stackAllocator(state.stackAllocator),
     heapAllocator(state.heapAllocator),
     constraints(state.constraints),
+    unsimplified(state.unsimplified),
     pathOS(state.pathOS),
     symPathOS(state.symPathOS),
     coveredLines(state.coveredLines),
