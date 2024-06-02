@@ -368,7 +368,7 @@ bool Z3SolverImpl::internalRunSolver(
   while (stack_it != assertionStack.end() && !all_written() && !(*stack_it)->compare(*get_expr_to_write())) {
     ++stack_it;
     advance_expr_to_write();
-    ++stats::commonConstraints;
+    // ++stats::commonConstraints;
   }
 
   // LCP is computed; start the timer.

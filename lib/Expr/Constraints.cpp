@@ -12,6 +12,7 @@
 #include "klee/Expr/ExprVisitor.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/OptionCategories.h"
+#include "klee/Solver/SolverStats.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -84,6 +85,10 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
     } else {
       constraints.push_back(ce);
     }
+  }
+
+  if (changed) {
+    ++stats::commonConstraints;
   }
 
   return changed;
