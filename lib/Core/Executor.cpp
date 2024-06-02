@@ -4047,7 +4047,7 @@ void Executor::callExternalFunction(ExecutionState &state, KInstruction *target,
         ce->toMemory(&args[wordIndex]);
         wordIndex += (ce->getWidth() + 63) / 64;
       } else {
-        klee_warning("EXTERNAL CALL WITH SYMBOLIC ARG");
+        ++stats::symCalls;
         terminateStateOnExecError(state,
                                   "external call with symbolic argument: " +
                                       callable->getName());

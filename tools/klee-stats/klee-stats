@@ -110,6 +110,9 @@ Legend = [
         "CommonConstraints", "number of common constraints between consecutive queries", "CommonConstraints"
     ),
     (
+        "SymCalls", "number of states terminated due to symbolic external calls", "SymCalls"
+    ),
+    (
         "SolverQueryConstructs",
         "number of query constructs for all queries send to the constraint solver",
         "NumQueryConstructs",
