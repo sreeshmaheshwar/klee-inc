@@ -4833,11 +4833,11 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                                    &res) {
   solver->setTimeout(coreSolverTimeout);
 
-  ConstraintSet extendedConstraints(state.constraints);
-  ConstraintManager cm_simplified(extendedConstraints);
-
   ConstraintSet extendedUnsimplifiedConstraints(state.unsimplified);
   ConstraintManager cm_unsimplified(extendedUnsimplifiedConstraints, /*unsimplified=*/true);
+
+  ConstraintSet extendedConstraints(state.constraints);
+  ConstraintManager cm_simplified(extendedConstraints);
 
   // Go through each byte in every test case and attempt to restrict
   // it to the constraints contained in cexPreferences.  (Note:
@@ -4858,8 +4858,8 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     // If the particular constraint operated on in this iteration through
     // the loop isn't implied then add it to the list of constraints.
     if (!mustBeTrue) {
+      cm_unsimplified.addConstraint(ConstraintManager::simplifyExpr(extendedConstraints, pi), false);
       cm_simplified.addConstraint(pi);
-      cm_unsimplified.addConstraint(pi);
     }
   }
 

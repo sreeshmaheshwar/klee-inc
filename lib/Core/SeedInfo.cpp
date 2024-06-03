@@ -62,13 +62,14 @@ KTestObject *SeedInfo::getNextInput(const MemoryObject *mo,
 void SeedInfo::patchSeed(const ExecutionState &state, 
                          ref<Expr> condition,
                          TimingSolver *solver) {
+  ConstraintSet requiredUnsimp(state.constraints);
+  ConstraintManager cmUnsimp(requiredUnsimp, true);
+  cmUnsimp.addConstraint(ConstraintManager::simplifyExpr(state.constraints, condition), false);
+
   ConstraintSet required(state.constraints);
   ConstraintManager cm(required);
   cm.addConstraint(condition);
 
-  ConstraintSet requiredUnsimp(state.constraints);
-  ConstraintManager cmUnsimp(requiredUnsimp, true);
-  cmUnsimp.addConstraint(condition);
 
   // Try and patch direct reads first, this is likely to resolve the
   // problem quickly and avoids long traversal of all seed

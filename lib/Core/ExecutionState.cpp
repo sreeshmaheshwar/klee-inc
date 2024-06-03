@@ -396,11 +396,11 @@ void ExecutionState::dumpStack(llvm::raw_ostream &out) const {
 
 void ExecutionState::addConstraint(ref<Expr> e) {
   {
-    ConstraintManager c(constraints);
-    c.addConstraint(e);
+    ConstraintManager c(unsimplified, /*unsimplified=*/true);
+    c.addConstraint(ConstraintManager::simplifyExpr(constraints, e), /*simplify=*/false);
   }
   {
-    ConstraintManager c(unsimplified, /*unsimplified=*/true);
+    ConstraintManager c(constraints);
     c.addConstraint(e);
   }
 }
