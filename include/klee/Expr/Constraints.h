@@ -26,6 +26,8 @@ public:
 
   using constraint_iterator = const_iterator;
 
+  constraints_ty constraints;
+
   bool empty() const;
   constraint_iterator begin() const;
   constraint_iterator end() const;
@@ -39,9 +41,6 @@ public:
   bool operator==(const ConstraintSet &b) const {
     return constraints == b.constraints;
   }
-
-private:
-  constraints_ty constraints;
 };
 
 class ExprVisitor;

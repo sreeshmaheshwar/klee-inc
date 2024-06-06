@@ -57,57 +57,6 @@ llvm::cl::opt<unsigned>
 
 namespace klee {
 
-class Z3SolverImpl : public SolverImpl {
-private:
-  ConstraintSet::constraints_ty assertionStack;
-  Z3_solver z3Solver;
-  std::unique_ptr<Z3Builder> builder;
-  time::Span timeout;
-  SolverRunStatus runStatusCode;
-  std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
-  ::Z3_params solverParameters;
-  // Parameter symbols
-  ::Z3_symbol timeoutParamStrSymbol;
-
-  bool internalRunSolverGlobal(const Query &,
-                               const std::vector<const Array *> *objects,
-                               std::vector<std::vector<unsigned char> > *values,
-                               bool &hasSolution);
-  bool internalRunSolver(const Query &,
-                         const std::vector<const Array *> *objects,
-                         std::vector<std::vector<unsigned char> > *values,
-                         bool &hasSolution);
-  bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
-
-public:
-  Z3SolverImpl();
-  ~Z3SolverImpl();
-
-  std::string getConstraintLog(const Query &) override;
-  void setCoreSolverTimeout(time::Span _timeout) {
-    timeout = _timeout;
-
-    auto timeoutInMilliSeconds = static_cast<unsigned>((timeout.toMicroseconds() / 1000));
-    if (!timeoutInMilliSeconds)
-      timeoutInMilliSeconds = UINT_MAX;
-    Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
-                       timeoutInMilliSeconds);
-  }
-
-  bool computeTruth(const Query &, bool &isValid);
-  bool computeValue(const Query &, ref<Expr> &result);
-  bool computeInitialValues(const Query &,
-                            const std::vector<const Array *> &objects,
-                            std::vector<std::vector<unsigned char> > &values,
-                            bool &hasSolution);
-  SolverRunStatus
-  handleSolverResponse(::Z3_solver theSolver, ::Z3_lbool satisfiable,
-                       const std::vector<const Array *> *objects,
-                       std::vector<std::vector<unsigned char> > *values,
-                       bool &hasSolution);
-  SolverRunStatus getOperationStatusCode();
-};
-
 Z3SolverImpl::Z3SolverImpl()
     : builder(new Z3Builder(
           /*autoClearConstructCache=*/false,
