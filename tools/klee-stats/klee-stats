@@ -74,6 +74,15 @@ Legend = [
         "CexCacheTime",
     ),
     (
+        "TQueryCache(s)",
+        "time spent in the query caching solver and below (incl. constraint solver)",
+        "QueryCacheTime",
+    ),
+    (
+        "TIndependence(s)",
+        "time spent in the independence solver and below (incl. constraint solver)",
+        "IndependenceTime",
+    )(
         "TCex(%)",
         "relative time spent in the counterexample caching code wrt wall time (incl. constraint solver)",
         "RelCexCacheTime",
@@ -367,6 +376,8 @@ def add_artificial_columns(record):
         "QueryTime",
         "SolverTime",
         "CexCacheTime",
+        "QueryCacheTime",
+        "IndependenceTime",
         "ForkTime",
         "ResolveTime",
     ]:

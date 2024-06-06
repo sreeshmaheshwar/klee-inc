@@ -457,6 +457,8 @@ void StatsTracker::writeStatsHeader() {
          << "QueryTime INTEGER,"
          << "SolverTime INTEGER,"
          << "CexCacheTime INTEGER,"
+         << "QueryCacheTime INTEGER,"
+         << "IndependenceTime INTEGER,"
          << "ForkTime INTEGER,"
          << "ResolveTime INTEGER,"
          << "QueryCacheMisses INTEGER,"
@@ -503,6 +505,8 @@ void StatsTracker::writeStatsHeader() {
          << "QueryTime,"
          << "SolverTime,"
          << "CexCacheTime,"
+         << "QueryCacheTime,"
+         << "IndependenceTime,"
          << "ForkTime,"
          << "ResolveTime,"
          << "QueryCacheMisses,"
@@ -522,6 +526,8 @@ void StatsTracker::writeStatsHeader() {
   #undef TCLASS
   #define TCLASS(Name, I) << "?,"
   insert << " VALUES ("
+         << "?,"
+         << "?,"
          << "?,"
          << "?,"
          << "?,"
@@ -584,6 +590,8 @@ void StatsTracker::writeStatsLine() {
   sqlite3_bind_int64(insertStmt, arg++, stats::queryTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::solverTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::cexCacheTime);
+  sqlite3_bind_int64(insertStmt, arg++, stats::queryCacheTime);
+  sqlite3_bind_int64(insertStmt, arg++, stats::independenceTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::forkTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::resolveTime);
   sqlite3_bind_int64(insertStmt, arg++, stats::queryCacheMisses);

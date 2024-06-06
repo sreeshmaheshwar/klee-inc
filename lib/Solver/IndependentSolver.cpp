@@ -17,6 +17,9 @@
 #include "klee/Support/Debug.h"
 #include "klee/Solver/SolverImpl.h"
 
+#include "klee/Statistics/TimerStatIncrementer.h"
+#include "klee/Solver/SolverStats.h"
+
 #include "llvm/Support/raw_ostream.h"
 
 #include <list>
@@ -410,6 +413,7 @@ public:
   
 bool IndependentSolver::computeValidity(const Query& query,
                                         Solver::Validity &result) {
+  TimerStatIncrementer t(stats::independenceTime);
   std::vector< ref<Expr> > required;
   IndependentElementSet eltsClosure =
     getIndependentConstraints(query, required);
@@ -419,6 +423,7 @@ bool IndependentSolver::computeValidity(const Query& query,
 }
 
 bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
+  TimerStatIncrementer t(stats::independenceTime);
   std::vector< ref<Expr> > required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
@@ -428,6 +433,7 @@ bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
 }
 
 bool IndependentSolver::computeValue(const Query& query, ref<Expr> &result) {
+  TimerStatIncrementer t(stats::independenceTime);
   std::vector< ref<Expr> > required;
   IndependentElementSet eltsClosure = 
     getIndependentConstraints(query, required);
@@ -475,6 +481,7 @@ bool IndependentSolver::computeInitialValues(const Query& query,
                                              const std::vector<const Array*> &objects,
                                              std::vector< std::vector<unsigned char> > &values,
                                              bool &hasSolution){
+  TimerStatIncrementer t(stats::independenceTime);
   // We assume the query has a solution except proven differently
   // This is important in case we don't have any constraints but
   // we need initial values for requested array objects.
