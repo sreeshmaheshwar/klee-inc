@@ -69,10 +69,6 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
 
-  bool internalRunSolverGlobal(const Query &,
-                               const std::vector<const Array *> *objects,
-                               std::vector<std::vector<unsigned char> > *values,
-                               bool &hasSolution);
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
