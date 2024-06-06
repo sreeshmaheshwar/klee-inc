@@ -82,7 +82,8 @@ Legend = [
         "TIndependence(s)",
         "time spent in the independence solver and below (incl. constraint solver)",
         "IndependenceTime",
-    )(
+    ),
+    (
         "TCex(%)",
         "relative time spent in the counterexample caching code wrt wall time (incl. constraint solver)",
         "RelCexCacheTime",
