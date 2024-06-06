@@ -51,7 +51,6 @@ public:
 
 class Z3SolverImpl : public SolverImpl {
 private:
-  ConstraintSet::constraints_ty assertionStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
@@ -68,6 +67,16 @@ private:
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
 
 public:
+  ConstraintSet::constraints_ty assertionStack;
+
+  // TODO: Make friendly?
+  bool popAndAssertThoseInPrefix(int lcp,
+                                 const std::vector<bool>& inPrefix,
+                                 const ConstraintSet::constraints_ty &constraints,
+                                 const std::vector<const Array *> *objects,
+                                 std::vector<std::vector<unsigned char> > *values,
+                                 bool &hasSolution);
+
   Z3SolverImpl();
   ~Z3SolverImpl();
 
