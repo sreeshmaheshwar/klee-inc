@@ -69,13 +69,12 @@ private:
 public:
   ConstraintSet::constraints_ty assertionStack;
 
-  // TODO: Make friendly?
-  bool popAndAssertThoseInPrefix(int lcp,
-                                 const std::vector<bool>& inPrefix,
-                                 const ConstraintSet::constraints_ty &constraints,
-                                 const std::vector<const Array *> *objects,
-                                 std::vector<std::vector<unsigned char> > *values,
-                                 bool &hasSolution);
+  // TODO: Make friendly.
+  bool popAndAssertRemaining(int framesToPop,
+                             const Query &query,
+                             const std::vector<const Array *> *objects,
+                             std::vector<std::vector<unsigned char> > *values,
+                             bool &hasSolution);
 
   Z3SolverImpl();
   ~Z3SolverImpl();

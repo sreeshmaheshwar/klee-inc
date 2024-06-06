@@ -198,25 +198,58 @@ bool Z3SolverImpl::computeInitialValues(
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
-bool Z3SolverImpl::popAndAssertThoseInPrefix(int lcp,
-                                             const std::vector<bool>& inPrefix,
-                                             const ConstraintSet::constraints_ty &constraints,
-                                             const std::vector<const Array *> *objects,
-                                             std::vector<std::vector<unsigned char> > *values,
-                                             bool &hasSolution) {
+bool Z3SolverImpl::popAndAssertRemaining(int framesToPop,
+                                         const Query &query,
+                                         const std::vector<const Array *> *objects,
+                                         std::vector<std::vector<unsigned char> > *values,
+                                         bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
-  Z3_solver_pop(builder->ctx, z3Solver, (int) assertionStack.size() - lcp);
-  assertionStack.resize(lcp);
-  
-  for (auto i = 0u; i < constraints.size(); ++i) {
-    if (!inPrefix[i]) {
-      assertionStack.push_back(constraints[i]);
-      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(constraints[i]));
+  Z3_solver_pop(builder->ctx, z3Solver, (int) assertionStack.size() - framesToPop);
+  assertionStack.resize(framesToPop);
 
+  ExprHashSet inStack;
+  for (const auto &e : assertionStack) {
+    inStack.insert(e);
+  }
+  
+  // KLEE Queries are validity queries i.e.
+  // ∀ X Constraints(X) → query(X)
+  // but Z3 works in terms of satisfiability so instead we ask the
+  // negation of the equivalent i.e.
+  // ∃ X Constraints(X) ∧ ¬ query(X)
+  auto negated_exp = Expr::createIsZero(query.expr);
+  bool expr_done = false;
+  auto query_it = query.constraints.begin();
+  // We can't modify the query constraints (by pushing the negated
+  // expression to it) and don't want to create a copy of them. So
+  // we take the approach of manually advancing custom iterators.
+  auto all_written = [&]() -> bool {
+    return query_it == query.constraints.end() && expr_done;
+  };
+  auto get_expr_to_write = [&]() {
+    if (query_it == query.constraints.end()) {
+      return negated_exp;
+    }
+    return *query_it;
+  };
+  auto advance_expr_to_write = [&]() {
+    if (query_it != query.constraints.end()) {
+      ++query_it;
+    } else {
+      expr_done = true;
+    }
+  };
+
+  for (; !all_written(); advance_expr_to_write()) {
+    auto e = get_expr_to_write();
+    if (inStack.insert(e).second) {
+      Z3_solver_push(builder->ctx, z3Solver);
+      assertionStack.push_back(e);
+      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
       ConstantArrayFinder constant_arrays_in_query;
-      constant_arrays_in_query.visit(constraints[i]);
+      constant_arrays_in_query.visit(e);
       // Add constant array assertions, NB: at the same level, to benefit from
       // incrementality over them. Downside is that we may assert the same
       // constraint multiple times.

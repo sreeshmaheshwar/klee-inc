@@ -57,7 +57,7 @@ Z3PoolingSolverImpl::Z3PoolingSolverImpl() : lastUsed(PoolSize, 0), previousId(0
     klee_error("Pool size must be at least 1");
   }
   for (auto i = 0u; i < PoolSize; ++i) {
-    pool.emplace_back();
+    pool.push_back(std::make_unique<Z3SolverImpl>());
   }
 }
 
@@ -97,40 +97,39 @@ bool Z3PoolingSolverImpl::computeInitialValues(
 bool Z3PoolingSolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
-  count += 1;
-  auto constraints = query.constraints.constraints;
-  constraints.push_back(Expr::createIsZero(query.expr));
-  std::sort(constraints.begin(), constraints.end());
-  constraints.erase(std::unique(constraints.begin(), constraints.end()),
-                    constraints.end());
-  auto in_set = [&](const ref<Expr> &e, int& location) {
-    location = int(std::lower_bound(constraints.begin(), constraints.end(), e) - constraints.begin());
-    return location < (int) constraints.size() && constraints[location] == e;
-  };
-  int use = -1;
-  int maxLCP = 0;
-  int n = (int) constraints.size();
-  std::vector<bool> bestInPrefix(n, false);
+  ExprHashSet queryExpressions;
+  for (const auto& e : query.constraints) {
+    queryExpressions.insert(e);
+  }
+  queryExpressions.insert(Expr::createIsZero(query.expr));
+
+  int bestId = -1, maxLCP = 0;
   for (auto id = 0u; id < PoolSize; ++id) {
-    std::vector<bool> inPrefix(n, false);
-    int j = 0, location;
-    while (j < (int) pool[id]->assertionStack.size() && in_set(pool[id]->assertionStack[j], location)) {
-      inPrefix[location] = true;
+    int j = 0;
+    while (j < (int) pool[id]->assertionStack.size() && queryExpressions.count(pool[id]->assertionStack[j])) {
       j++;
     }
     if (j > maxLCP) {
       maxLCP = j;
-      use = id;
-      bestInPrefix = inPrefix;
+      bestId = id;
     }
   }
-  if (use < 0) {
-    // We need to pick one to evict so let's pick the least recently used.
-    use = (int) (min_element(lastUsed.begin(), lastUsed.end()) - lastUsed.begin());
+
+  if (bestId < 0) {
+    // We need to pick one to evict - we use LRU.
+    bestId = (int) (min_element(lastUsed.begin(), lastUsed.end()) - lastUsed.begin());
+    klee_warning("Evicting solver %d", bestId);
   }
-  lastUsed[use] = count;
-  previousId = use;
-  return pool[use]->popAndAssertThoseInPrefix(maxLCP, bestInPrefix, constraints, objects, values, hasSolution);
+
+  lastUsed[bestId] = ++count;
+  previousId = bestId;
+  klee_warning("Using solver %d", bestId);
+
+  return pool[bestId]->popAndAssertRemaining(maxLCP,
+                                             query,
+                                             objects,
+                                             values,
+                                             hasSolution);
 }
 
 SolverImpl::SolverRunStatus Z3PoolingSolverImpl::getOperationStatusCode() {
