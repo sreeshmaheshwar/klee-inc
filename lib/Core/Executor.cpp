@@ -3597,8 +3597,10 @@ void Executor::doDumpStates() {
   }
 
   klee_message("halting execution, dumping remaining states");
-  for (const auto &state : states)
-    terminateStateEarly(*state, "Execution halting.", StateTerminationType::Interrupted);
+  // Reverse order of terminating states - allows solve to continually reset to old state.
+  for (auto it = states.rbegin(); it != states.rend(); ++it) {
+    terminateStateEarly(**it, "Execution halting.", StateTerminationType::Interrupted);
+  }
   updateStates(nullptr);
 }
 
