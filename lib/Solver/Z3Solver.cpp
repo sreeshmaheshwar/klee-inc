@@ -301,7 +301,11 @@ bool Z3SolverImpl::internalRunSolver(
     Z3_solver_push(builder->ctx, z3Solver);
     auto e = get_expr_to_write();
     assertionStack.push_back(e);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
+    {
+      auto tmp = builder->construct(e);
+      TimerStatIncrementer t2(stats::postLCPTime);
+      Z3_solver_assert(builder->ctx, z3Solver, tmp);
+    }
 
     ConstantArrayFinder constant_arrays_in_query;
     constant_arrays_in_query.visit(e);
@@ -313,6 +317,7 @@ bool Z3SolverImpl::internalRunSolver(
               "Constant array found in query, but not handled by Z3Builder");
       for (auto const &arrayIndexValueExpr :
             builder->constant_array_assertions[constant_array]) {
+        TimerStatIncrementer t2(stats::postLCPTime);
         Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
       }
     }
