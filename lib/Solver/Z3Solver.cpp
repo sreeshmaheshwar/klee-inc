@@ -361,7 +361,7 @@ bool Z3SolverImpl::internalRunSolverIncremental(
     if (implication) {
       Z3_solver_assert(builder->ctx, z3Solver, implication.value());
     } else {
-      klee_warning("Using existing assumption literal");
+      // klee_warning("Using existing assumption literal");
     }
     constant_arrays_in_query.visit(constraint);
   };
@@ -405,8 +405,9 @@ bool Z3SolverImpl::internalRunSolverIncremental(
     *dumpedQueriesFile << Z3_solver_to_string(builder->ctx, z3Solver);
     *dumpedQueriesFile << "(check-sat)\n";
     *dumpedQueriesFile << "(reset)\n";
-    *dumpedQueriesFile << "; end Z3 query\n\n";
-    *dumpedQueriesFile << "; " << assumptions.size() << " assumptions\n";
+    *dumpedQueriesFile << "; end Z3 query\n";
+    *dumpedQueriesFile << "; " << assumptions.size() << " assumptions used\n";
+    dumpedQueriesFile->flush();
   }
 
   std::vector<::Z3_ast> raw_assumptions{assumptions.cbegin(),
