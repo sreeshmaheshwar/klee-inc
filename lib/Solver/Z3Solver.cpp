@@ -351,13 +351,17 @@ bool Z3SolverImpl::internalRunSolverIncremental(
   std::vector<Z3ASTHandle> assumptions;
   ConstantArrayFinder constant_arrays_in_query;
 
+  // If the constraint already has an impliciation literal associated with it,
+  // add it to the assumption literals for the `check_sat_assuming` command.
+  // Otherwise, create a new impliciation literal (handled by the `Z3Builder`)
+  // `assert` the impliciation, then add it.
   auto assertConstraint = [&](const ref<Expr> &constraint) -> void {
     auto [assumption, implication] = builder->assumptionLiteral(constraint);
     assumptions.push_back(assumption);
     if (implication) {
       Z3_solver_assert(builder->ctx, z3Solver, implication.value());
     } else {
-      // klee_warning("Using existing assumption literal");
+      klee_warning("Using existing assumption literal");
     }
     constant_arrays_in_query.visit(constraint);
   };
@@ -365,6 +369,8 @@ bool Z3SolverImpl::internalRunSolverIncremental(
   for (const auto &constraint : query.constraints) {
     assertConstraint(constraint);
   }
+
+
   ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
@@ -377,6 +383,8 @@ bool Z3SolverImpl::internalRunSolverIncremental(
   auto negatedExpr = Expr::createIsZero(query.expr);
   assertConstraint(negatedExpr);
 
+  // We now process all constant array assertions. We associate these with
+  // assumption literals as well, to benefit from incrementality over them.
   for (auto const &constant_array : constant_arrays_in_query.results) {
     assert(builder->constant_array_assertions.count(constant_array) == 1 &&
            "Constant array found in query, but not handled by Z3Builder");
@@ -398,7 +406,7 @@ bool Z3SolverImpl::internalRunSolverIncremental(
     *dumpedQueriesFile << "(check-sat)\n";
     *dumpedQueriesFile << "(reset)\n";
     *dumpedQueriesFile << "; end Z3 query\n\n";
-    dumpedQueriesFile->flush();
+    *dumpedQueriesFile << "; " << assumptions.size() << " assumptions\n";
   }
 
   std::vector<::Z3_ast> raw_assumptions{assumptions.cbegin(),

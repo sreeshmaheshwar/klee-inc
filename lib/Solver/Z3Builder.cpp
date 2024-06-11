@@ -132,7 +132,11 @@ Z3SortHandle Z3Builder::getArraySort(Z3SortHandle domainSort,
 Z3ASTHandle Z3Builder::newAssumptionLiteral() {
   static unsigned id = 0;
   std::string unique_id = llvm::utostr(id++);
-  std::string unique_name = "alit_" + unique_id; // TODO: Ensure this is unique?
+  // Note: We add an underscore afterwards to differentiate it from any
+  // array name that ends with a number. We still use a counter, just like
+  // array names do, to avoid any potential name clashes among implication
+  // literals. 
+  std::string unique_name = "alit_" + unique_id + "_";
   Z3_symbol name = Z3_mk_string_symbol(ctx, unique_name.c_str());
   return Z3ASTHandle(Z3_mk_const(ctx, name, getBoolSort()), ctx);
 }
