@@ -76,7 +76,7 @@ void QueryLoggingSolver::startQuery(const Query &query, const char *typeName,
             << "Type: " << typeName << ", "
             << "Instructions: " << instructions << "\n";
 
-  printQuery(query, falseQuery, objects);
+  // printQuery(query, falseQuery, objects);
 
   if (DumpPartialQueryiesEarly) {
     flushBufferConditionally(true);
