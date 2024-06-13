@@ -3764,6 +3764,8 @@ void Executor::terminateState(ExecutionState &state,
                       "replay did not consume all objects in test input.");
   }
 
+  klee_warning("Terminating state %d", state.id);
+
   interpreterHandler->incPathsExplored();
   executionTree->setTerminationType(state, reason);
 
