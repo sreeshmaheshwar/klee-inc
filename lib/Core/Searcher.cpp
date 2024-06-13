@@ -555,7 +555,7 @@ ExecutionState &InterleavedSearcher::selectState() {
   Searcher *s = searchers[--index].get();
   if (index == 0) index = searchers.size();
   ExecutionState& res = s->selectState();
-  klee_warning("SELECT %d", res->id);
+  klee_warning("SELECT %d", res.id);
   return res;
 }
 
