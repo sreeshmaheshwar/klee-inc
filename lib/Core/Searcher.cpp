@@ -554,7 +554,9 @@ InterleavedSearcher::InterleavedSearcher(const std::vector<Searcher*> &_searcher
 ExecutionState &InterleavedSearcher::selectState() {
   Searcher *s = searchers[--index].get();
   if (index == 0) index = searchers.size();
-  return s->selectState();
+  ExecutionState& res = s->selectState();
+  klee_warning("SELECT %d", res->id);
+  return res;
 }
 
 void InterleavedSearcher::update(ExecutionState *current,
