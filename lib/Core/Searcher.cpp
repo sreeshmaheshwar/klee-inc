@@ -293,7 +293,7 @@ ExecutionState &RandomPathSearcher::selectState() {
   }
 
   // Print state selected.
-  auto id = *n->state.id;
+  auto id = n->state->id;
   Statistic *S = theStatisticManager->getStatisticByName("Instructions");
   uint64_t instructions = S ? S->getValue() : 0;
   klee_warning("SELECT %d %lu", id, instructions);
