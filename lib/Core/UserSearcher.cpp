@@ -88,6 +88,7 @@ cl::opt<std::string> StateInputFile(
     cl::cat(SearchCat));
 
 cl::opt<std::string> StateOutputFile(
+    "state-output",
     cl::desc("File to output search states to for an outputting search. Disable with \"\". (default=\"\")"),
     cl::init(""),
     cl::cat(SearchCat));
