@@ -69,6 +69,7 @@ private:
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
+  ::Z3_symbol s2TimeoutParamStrSymbol;
 
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
@@ -87,6 +88,7 @@ public:
     auto timeoutInMilliSeconds = static_cast<unsigned>((timeout.toMicroseconds() / 1000));
     if (!timeoutInMilliSeconds)
       timeoutInMilliSeconds = UINT_MAX;
+
     Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
                        timeoutInMilliSeconds);
   }
@@ -115,8 +117,13 @@ Z3SolverImpl::Z3SolverImpl()
   assert(builder && "unable to create Z3Builder");
   solverParameters = Z3_mk_params(builder->ctx);
   Z3_params_inc_ref(builder->ctx, solverParameters);
+
   timeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "timeout");
-  setCoreSolverTimeout(timeout); // TODO: Set incremental solver timeout?
+  setCoreSolverTimeout(timeout);
+
+  s2TimeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "combined_solver.solver2_timeout");
+  Z3_params_set_uint(builder->ctx, solverParameters, s2TimeoutParamStrSymbol,
+                       5000); // 5 second incremental timeout.
 
   if (!Z3QueryDumpFile.empty()) {
     std::string error;
