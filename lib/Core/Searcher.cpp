@@ -292,11 +292,11 @@ ExecutionState &RandomPathSearcher::selectState() {
     }
   }
 
-  // Print state selected.
-  auto id = n->state->id;
-  Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-  uint64_t instructions = S ? S->getValue() : 0;
-  klee_warning("SELECT %d %lu", id, instructions);
+  // // Print state selected.
+  // auto id = n->state->id;
+  // Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+  // uint64_t instructions = S ? S->getValue() : 0;
+  // klee_warning("SELECT %d %lu", id, instructions);
 
   return *n->state;
 }
@@ -559,9 +559,9 @@ ExecutionState &InterleavedSearcher::selectState() {
   Searcher *s = searchers[--index].get();
   if (index == 0) index = searchers.size();
   ExecutionState& res = s->selectState();
-  Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-  uint64_t instructions = S ? S->getValue() : 0;
-  klee_warning("SELECT %d %lu", res.id, instructions);
+  // Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+  // uint64_t instructions = S ? S->getValue() : 0;
+  // klee_warning("SELECT %d %lu", res.id, instructions);
   return res;
 }
 
