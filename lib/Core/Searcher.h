@@ -318,6 +318,42 @@ namespace klee {
     void printName(llvm::raw_ostream &os) override;
   };
 
+  class OutputtingSearcher final : public Searcher {
+    std::unique_ptr<llvm::raw_ostream> sos; // State Output Stream. 
+    std::unique_ptr<Searcher> searcher;
+
+  public:
+    explicit OutputtingSearcher(std::unique_ptr<llvm::raw_ostream> _sos);
+    ExecutionState &selectState() override;
+    void update(ExecutionState *current,
+                const std::vector<ExecutionState *> &addedStates,
+                const std::vector<ExecutionState *> &removedStates) override;
+    bool empty() override;
+    void printName(llvm::raw_ostream &os) override;
+  };
+
+  // NOTE: This searcher does not delegate. Perhaps it should to mirror memory usage, but
+  // doing so without every using the result (and solely for time/memory mimicking) is
+  // very inelegant and makeshift. Instead, it makes more sense for this to be implemented
+  // as the API intends, and for us to discuss the lack of mirroring time/memory consumption
+  // associated with KLEE's heuristic searchers as a thread to validity. Time itself can of course
+  // be recorded in the original version and in this one (then this time subtracted and the other
+  // time added) to manufacture a reasonable result (which itself is another threat to validity but
+  // a lesser one) .
+  class InputtingSearcher final : public Searcher {
+    std::unique_ptr<std::istringstream> sis; // State Output Stream. 
+    std::map<std::uint32_t, ExecutionState*> byId; // Maps ID to state.
+
+  public:
+    explicit InputtingSearcher(std::unique_ptr<std::istringstream> _sis);
+    ExecutionState &selectState() override;
+    void update(ExecutionState *current,
+                const std::vector<ExecutionState *> &addedStates,
+                const std::vector<ExecutionState *> &removedStates) override;
+    bool empty() override;
+    void printName(llvm::raw_ostream &os) override;
+  };
+
 } // klee namespace
 
 #endif /* KLEE_SEARCHER_H */
