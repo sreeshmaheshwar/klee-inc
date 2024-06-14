@@ -3572,6 +3572,7 @@ bool Executor::checkMemoryUsage() {
   // just guess at how many to kill
   const auto numStates = states.size();
   auto toKill = std::max(1UL, numStates - numStates * MaxMemory / totalUsage);
+  klee_error("Killing states... terminating");
   klee_warning("killing %lu states (over memory cap: %luMB)", toKill, totalUsage);
 
   // randomly select states for early termination
