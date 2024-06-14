@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
+#include "klee/Support/FileHandling.h"
 
 #include <map>
 #include <queue>
@@ -71,7 +72,8 @@ namespace klee {
       NURS_RP,
       NURS_ICnt,
       NURS_CPICnt,
-      NURS_QC
+      NURS_QC,
+      Inputting
     };
   };
 
@@ -319,11 +321,12 @@ namespace klee {
   };
 
   class OutputtingSearcher final : public Searcher {
-    std::unique_ptr<llvm::raw_ostream> sos; // State Output Stream. 
     std::unique_ptr<Searcher> searcher;
+    std::unique_ptr<llvm::raw_ostream> sos; // State Output Stream. 
 
   public:
-    explicit OutputtingSearcher(std::unique_ptr<llvm::raw_ostream> _sos);
+    explicit OutputtingSearcher(Searcher* _searcher, std::unique_ptr<llvm::raw_ostream> _sos);
+    explicit OutputtingSearcher(Searcher* _searcher, std::string fileName);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
@@ -346,6 +349,7 @@ namespace klee {
 
   public:
     explicit InputtingSearcher(std::unique_ptr<std::istringstream> _sis);
+    explicit InputtingSearcher(std::string fileName);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
                 const std::vector<ExecutionState *> &addedStates,
