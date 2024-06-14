@@ -577,8 +577,19 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   os << "</InterleavedSearcher>\n";
 }
 
-OutputtingSearcher::OutputtingSearcher(std::unique_ptr<llvm::raw_ostream> _sos) :
-  sos(std::move(_sos)) {}
+OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::unique_ptr<llvm::raw_ostream> _sos) :
+  searcher(_searcher), sos(std::move(_sos)) {}
+
+OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName) : searcher(_searcher) {
+  if (fileName.empty()) {
+    klee_error("No output file specified but outputting searcher used");
+  }
+  std::string error;
+  sos = klee_open_output_file(fileName, error);
+  if (!sos) {
+    klee_error("Could not open file for outputting searcher %s : %s", fileName.c_str(), error.c_str());
+  }
+}
 
 ExecutionState &OutputtingSearcher::selectState() {
   ExecutionState& res = searcher->selectState();
@@ -604,6 +615,18 @@ void OutputtingSearcher::printName(llvm::raw_ostream &os) {
 
 InputtingSearcher::InputtingSearcher(std::unique_ptr<std::istringstream> _sis)
   : sis(std::move(_sis)) {}
+
+InputtingSearcher::InputtingSearcher(std::string fileName) {
+  if (fileName.empty()) {
+    klee_error("No input file specified but inputting search used");
+  }
+  std::string error;
+  auto buffer = klee_open_input_file(fileName, error);
+  if (!buffer) {
+    klee_error("Could not open file for inputting search %s : %s", fileName.c_str(), error.c_str());
+  }
+  sis = std::make_unique<std::istringstream>(buffer->getBuffer().str());
+}
 
 ExecutionState &InputtingSearcher::selectState() {
   std::uint32_t id;
