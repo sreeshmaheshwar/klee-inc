@@ -18,6 +18,7 @@
 
 #include "Z3Solver.h"
 #include "Z3Builder.h"
+#include "Z3GlobalSolver.h"
 
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Assignment.h"
@@ -33,31 +34,15 @@
 #include <memory>
 
 namespace {
-// NOTE: Very useful for debugging Z3 behaviour. These files can be given to
-// the z3 binary to replay all Z3 API calls using its `-log` option.
-llvm::cl::opt<std::string> Z3LogInteractionFile(
-    "debug-z3-log-api-interaction", llvm::cl::init(""),
-    llvm::cl::desc("Log API interaction with Z3 to the specified path"),
-    llvm::cl::cat(klee::SolvingCat));
 
-llvm::cl::opt<std::string> Z3QueryDumpFile(
-    "debug-z3-dump-queries", llvm::cl::init(""),
-    llvm::cl::desc("Dump Z3's representation of the query to the specified path"),
-    llvm::cl::cat(klee::SolvingCat));
-
-llvm::cl::opt<bool> Z3ValidateModels(
-    "debug-z3-validate-models", llvm::cl::init(false),
-    llvm::cl::desc("When generating Z3 models validate these against the query"),
-    llvm::cl::cat(klee::SolvingCat));
-  
 llvm::cl::opt<std::string> CoreDumpFile(
     "core-times", llvm::cl::init(""),
     llvm::cl::desc("Print core solver times to this file"),
     llvm::cl::cat(klee::SolvingCat));
 
 llvm::cl::opt<unsigned>
-    Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
-                     llvm::cl::desc("Z3 verbosity level (default=0)"),
+    CSATimeout("csa-timeout", llvm::cl::init(70),
+                     llvm::cl::desc("CSA timeout (in milliseconds) (default=70)"),
                      llvm::cl::cat(klee::SolvingCat));
 }
 
@@ -67,11 +52,11 @@ namespace klee {
 
 class Z3SolverImpl : public SolverImpl {
 private:
-  ConstraintSet assertionStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
+  std::unique_ptr<Z3GlobalSolver> globalSolver;
   std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
   std::unique_ptr<llvm::raw_fd_ostream> coreTimesFile;
   ::Z3_params solverParameters;
@@ -90,13 +75,8 @@ public:
 
   std::string getConstraintLog(const Query &) override;
   void setCoreSolverTimeout(time::Span _timeout) {
-    timeout = _timeout;
-
-    auto timeoutInMilliSeconds = static_cast<unsigned>((timeout.toMicroseconds() / 1000));
-    if (!timeoutInMilliSeconds)
-      timeoutInMilliSeconds = UINT_MAX;
     Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
-                       timeoutInMilliSeconds);
+                       CSATimeout);
   }
 
   bool computeTruth(const Query &, bool &isValid);
@@ -119,7 +99,7 @@ Z3SolverImpl::Z3SolverImpl()
           /*z3LogInteractionFileArg=*/Z3LogInteractionFile.size() > 0
               ? Z3LogInteractionFile.c_str()
               : NULL)),
-      runStatusCode(SOLVER_RUN_STATUS_FAILURE) {
+      runStatusCode(SOLVER_RUN_STATUS_FAILURE), globalSolver(std::make_unique<Z3GlobalSolver>()) {
   assert(builder && "unable to create Z3Builder");
   solverParameters = Z3_mk_params(builder->ctx);
   Z3_params_inc_ref(builder->ctx, solverParameters);
@@ -360,6 +340,12 @@ bool Z3SolverImpl::internalRunSolver(
   // ``Query`` rather than only sharing within a single call to
   // ``builder->construct()``.
   builder->clearConstructCache(); // Doesn't clear the constant array assertions.
+
+  if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_TIMEOUT) {
+    bool ret = globalSolver->internalRunSolver(query, objects, values, hasSolution);
+    runStatusCode = globalSolver->impl->getOperationStatusCode();
+    return ret;
+  }
 
   if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
       runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
