@@ -3608,7 +3608,9 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
       idx = theRNG.getInt32() % N;
 
     std::swap(arr[idx], arr[N - 1]);
+    klee_warning("%d", arr[N-1]->id);
     terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+    klee_warning("All done");
     // TODO: Do we actually get here? Is instructions the right place?
   }
 }
