@@ -105,7 +105,6 @@ Z3Builder::~Z3Builder() {
   assumptionLiteralCache.clear();
   _arr_hash.clear();
   constant_array_assertions.clear();
-  constantArrayAssumptionLiteralCache.clear();
   Z3_del_context(ctx);
   if (z3LogInteractionFile.length() > 0) {
     Z3_close_log();
@@ -489,18 +488,6 @@ std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> Z3Builder::assumptionLiteral(
   Z3ASTHandle literal = Z3ASTHandle(newAssumptionLiteral(), ctx);
   assumptionLiteralCache[e] = literal;
   Z3ASTHandle implication = impliesExpr(literal, construct(e));
-  return {literal, std::optional<Z3ASTHandle>{implication}};
-}
-
-std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> Z3Builder::assumptionLiteralConstantArray(const Array *array, unsigned index, Z3ASTHandle constructedExpr) {
-  auto it = constantArrayAssumptionLiteralCache.find({array, index});
-  if (it != constantArrayAssumptionLiteralCache.end()) {
-    // Implication already asserted.
-    return {Z3ASTHandle(it->second, ctx), std::nullopt};
-  }
-  Z3ASTHandle literal = Z3ASTHandle(newAssumptionLiteral(), ctx);
-  constantArrayAssumptionLiteralCache[{array, index}] = literal;
-  Z3ASTHandle implication = impliesExpr(literal, constructedExpr);
   return {literal, std::optional<Z3ASTHandle>{implication}};
 }
 

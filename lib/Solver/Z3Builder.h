@@ -182,8 +182,6 @@ public:
   Z3_context ctx;
   std::unordered_map<const Array *, std::vector<Z3ASTHandle> >
       constant_array_assertions;
-  std::map<std::pair<const Array *, unsigned>, Z3ASTHandle> // TODO: Hash if need be.
-      constantArrayAssumptionLiteralCache;
   Z3Builder(bool autoClearConstructCache, const char *z3LogInteractionFile);
   ~Z3Builder();
 
@@ -198,10 +196,9 @@ public:
     return res;
   }
 
-  // Returns the assumption literal together with the implication assertion if 
+  // Returns the implication literal, together with the implication assertion if 
   // the expression is unseen.
   std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> assumptionLiteral(ref<Expr> e);
-  std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> assumptionLiteralConstantArray(const Array *array, unsigned index, Z3ASTHandle constructedExpr);
 
   void clearConstructCache() { constructed.clear(); }
 };

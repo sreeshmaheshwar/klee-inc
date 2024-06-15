@@ -70,6 +70,11 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
 
+  // All hard constraints consisting of asserted constant arrays.
+  // In this strategy, we do not associate them with implication literals
+  // to prevent propagation overhad.
+  std::unordered_set<const Array*> assertedArrays;
+
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
@@ -252,7 +257,6 @@ bool Z3SolverImpl::internalRunSolver(
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
-  // TODO: Better handle constant arrays.
   std::vector<Z3ASTHandle> assumptions;
   ConstantArrayFinder constant_arrays_in_query;
 
@@ -288,19 +292,14 @@ bool Z3SolverImpl::internalRunSolver(
   auto negatedExpr = Expr::createIsZero(query.expr);
   assertConstraint(negatedExpr);
 
-  // We now process all constant array assertions. We associate these with
-  // assumption literals as well, to benefit from incrementality over them.
   for (auto const &constant_array : constant_arrays_in_query.results) {
-    assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-           "Constant array found in query, but not handled by Z3Builder");
-    for (unsigned i = 0, e = constant_array->size; i != e; ++i) {
-      auto [assumption, implication] = builder->assumptionLiteralConstantArray(
-          constant_array, i, builder->constant_array_assertions[constant_array][i]);
-      assumptions.push_back(assumption);
-      if (implication) {
-        Z3_solver_assert(builder->ctx, z3Solver, implication.value());
-      } else {
-        // klee_warning("Using existing assumption literal - constant array");
+    // Only assert those constant array constraints that are not yet asserted.
+    if (assertedArrays.insert(constant_array).second) {
+      assert(builder->constant_array_assertions.count(constant_array) == 1 &&
+            "Constant array found in query, but not handled by Z3Builder");
+      for (auto const &arrayIndexValueExpr :
+          builder->constant_array_assertions[constant_array]) {
+        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
       }
     }
   }
