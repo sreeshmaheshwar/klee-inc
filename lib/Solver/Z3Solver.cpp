@@ -28,6 +28,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "klee/System/Time.h"
+
 #include <memory>
 
 namespace {
@@ -46,6 +48,11 @@ llvm::cl::opt<std::string> Z3QueryDumpFile(
 llvm::cl::opt<bool> Z3ValidateModels(
     "debug-z3-validate-models", llvm::cl::init(false),
     llvm::cl::desc("When generating Z3 models validate these against the query"),
+    llvm::cl::cat(klee::SolvingCat));
+  
+llvm::cl::opt<std::string> CoreDumpFile(
+    "core-times", llvm::cl::init(""),
+    llvm::cl::desc("Print core solver times to this file"),
     llvm::cl::cat(klee::SolvingCat));
 
 llvm::cl::opt<unsigned>
@@ -66,6 +73,7 @@ private:
   time::Span timeout;
   SolverRunStatus runStatusCode;
   std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
+  std::unique_ptr<llvm::raw_fd_ostream> coreTimesFile;
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
@@ -126,6 +134,17 @@ Z3SolverImpl::Z3SolverImpl()
                  error.c_str());
     }
     klee_message("Dumping Z3 queries to \"%s\"", Z3QueryDumpFile.c_str());
+  }
+
+  if (!CoreDumpFile.empty()) {
+    std::string error;
+    coreTimesFile = klee_open_output_file(CoreDumpFile, error);
+    if (!coreTimesFile) {
+      klee_error("Error creating file for dumping Z3 queries: %s",
+                 error.c_str());
+    }
+    klee_message("Dumping Z3 queries to \"%s\"", CoreDumpFile.c_str());
+    *coreTimesFile << "Instructions,Time" << "\n";
   }
 
   // Set verbosity
@@ -250,6 +269,10 @@ bool Z3SolverImpl::computeInitialValues(
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
+  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
+  TimerStatIncrementer t(stats::queryTime);
+  auto startTime = time::getWallTime();
+
   // Heuristic - every 1000 queries, clear solver state.
   // We created a backtracking point to the empty solver state, via `push`,
   // and continually return to it.
@@ -259,9 +282,6 @@ bool Z3SolverImpl::internalRunSolver(
     builder->assumptionLiteralCache.clear();
     builder->constantArrayLiteralCache.clear();
   }
-
-  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
-  TimerStatIncrementer t(stats::queryTime);
 
   std::vector<Z3ASTHandle> assumptions;
   ConstantArrayFinder constant_arrays_in_query;
@@ -324,6 +344,15 @@ bool Z3SolverImpl::internalRunSolver(
   
   runStatusCode = handleSolverResponse(z3Solver, satisfiable, objects, values,
                                        hasSolution);
+
+  if (coreTimesFile) {
+    auto lastQueryDuration = time::getWallTime() - startTime;
+
+    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    uint64_t instructions = S ? S->getValue() : 0;
+
+    *coreTimesFile << instructions << "," << lastQueryDuration.toMicroseconds() << "\n";
+  }
 
   // Clear the builder's cache to prevent memory usage exploding.
   // By using ``autoClearConstructCache=false`` and clearning now
