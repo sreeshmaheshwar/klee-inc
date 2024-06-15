@@ -3594,14 +3594,14 @@ void Executor::bindModuleConstants() {
 void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
     *stos << stats::instructions << " " << toKill << "\n";
-    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-    uint64_t instructions = S ? S->getValue() : 0;
-    klee_warning("term-bug at: %lu", instructions);
+    // Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    // uint64_t instructions = S ? S->getValue() : 0;
+    // klee_warning("term-bug at: %lu", instructions);
   }
 
   // randomly select states for early termination
   std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
-  klee_warning("term-bug n: %d", arr.size());
+  // klee_warning("term-bug n: %d", arr.size());
 
   if (stis) {
     int termIndex;
@@ -3609,7 +3609,7 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
       if (stos) {
         *stos << termIndex << " ";
       }
-      klee_warning("term-bug state: %d", arr[termIndex]->id);
+      // klee_warning("term-bug state: %d", arr[termIndex]->id);
       terminateStateEarly(*arr[termIndex], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
     }
   } else {
@@ -3624,7 +3624,7 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
 
       std::swap(arr[idx], arr[N - 1]);
       std::swap(stateIndex[idx], stateIndex[N - 1]);
-      klee_warning("term-bug state: %d", arr[N - 1]->id);
+      // klee_warning("term-bug state: %d", arr[N - 1]->id);
       terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
       if (stos) {
         *stos << stateIndex[N - 1] << " ";
@@ -3646,11 +3646,17 @@ bool Executor::checkMemoryUsage() {
   if ((stats::instructions & 0xFFFFU) != 0) // every 65536 instructions
     return true;
 
-  if (nextTerminationPresent && stats::instructions == nextInstructionsToTerminate) {
-    klee_warning("killing %lu states in replay mode", nextNumberToTerminate);
-    killStatesDueToCap(nextNumberToTerminate);
-    advanceTerminationReplay();
-    return false;
+  if (stis) {
+    if (nextTerminationPresent && stats::instructions == nextInstructionsToTerminate) {
+      klee_warning("killing %lu states in replay mode", nextNumberToTerminate);
+      killStatesDueToCap(nextNumberToTerminate);
+      advanceTerminationReplay();
+      return false;
+    }
+    // NOTE: Otherwise, we do not enforce Max Memory. This is because
+    // we are confident in our implementations - if merged, we should
+    // probably keep the Max Memory check to be safe and generalisable.
+    return true;
   }
 
   // check memory limit
