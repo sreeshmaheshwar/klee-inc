@@ -145,6 +145,7 @@ Z3SolverImpl::Z3SolverImpl()
   z3Solver = Z3_mk_solver(builder->ctx);
   Z3_solver_inc_ref(builder->ctx, z3Solver);
   Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
+  Z3_solver_push(builder->ctx, z3Solver);
 }
 
 Z3SolverImpl::~Z3SolverImpl() {
@@ -254,6 +255,16 @@ bool Z3SolverImpl::computeInitialValues(
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
+  // Heuristic - every 1000 queries, clear solver state.
+  // We created a backtracking point to the empty solver state, via `push`,
+  // and continually return to it.
+  if (++stats::solverQueries % 1000 == 0) {
+    Z3_solver_pop(builder->ctx, z3Solver, 1);
+    Z3_solver_push(builder->ctx, z3Solver);
+    assertedArrays.clear();
+    builder->assumptionLiteralCache.clear();
+  }
+
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
@@ -280,7 +291,6 @@ bool Z3SolverImpl::internalRunSolver(
   }
 
 
-  ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
 

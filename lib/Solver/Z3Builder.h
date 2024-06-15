@@ -105,7 +105,6 @@ public:
 
 class Z3Builder {
   ExprHashMap<std::pair<Z3ASTHandle, unsigned> > constructed;
-  ExprHashMap<Z3ASTHandle> assumptionLiteralCache;
   Z3ArrayExprHash _arr_hash;
 
 private:
@@ -182,6 +181,7 @@ public:
   Z3_context ctx;
   std::unordered_map<const Array *, std::vector<Z3ASTHandle> >
       constant_array_assertions;
+  ExprHashMap<Z3ASTHandle> assumptionLiteralCache;
   Z3Builder(bool autoClearConstructCache, const char *z3LogInteractionFile);
   ~Z3Builder();
 
