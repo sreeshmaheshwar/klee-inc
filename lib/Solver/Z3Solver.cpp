@@ -70,11 +70,6 @@ private:
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
 
-  // All hard constraints consisting of asserted constant arrays.
-  // In this strategy, we do not associate them with implication literals
-  // to prevent propagation overhad.
-  std::unordered_set<const Array*> assertedArrays;
-
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
@@ -261,8 +256,8 @@ bool Z3SolverImpl::internalRunSolver(
   if (++stats::solverQueries % 1000 == 0) {
     Z3_solver_pop(builder->ctx, z3Solver, 1);
     Z3_solver_push(builder->ctx, z3Solver);
-    assertedArrays.clear();
     builder->assumptionLiteralCache.clear();
+    builder->constantArrayLiteralCache.clear();
   }
 
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
@@ -302,16 +297,10 @@ bool Z3SolverImpl::internalRunSolver(
   auto negatedExpr = Expr::createIsZero(query.expr);
   assertConstraint(negatedExpr);
 
-  for (auto const &constant_array : constant_arrays_in_query.results) {
-    // Only assert those constant array constraints that are not yet asserted.
-    if (assertedArrays.insert(constant_array).second) {
-      assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-            "Constant array found in query, but not handled by Z3Builder");
-      for (auto const &arrayIndexValueExpr :
-          builder->constant_array_assertions[constant_array]) {
-        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
-      }
-    }
+  for (auto const &a : constant_arrays_in_query.results) {
+    assumptions.push_back(builder->assumptionLiteralConstArray(a, [&](const Z3ASTHandle& e) -> void {
+      Z3_solver_assert(builder->ctx, z3Solver, e);
+    }));
   }
 
   if (dumpedQueriesFile) {

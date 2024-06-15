@@ -17,6 +17,7 @@
 #include <optional>
 #include <utility>
 #include <unordered_map>
+#include <functional>
 #include <z3.h>
 
 namespace klee {
@@ -182,6 +183,7 @@ public:
   std::unordered_map<const Array *, std::vector<Z3ASTHandle> >
       constant_array_assertions;
   ExprHashMap<Z3ASTHandle> assumptionLiteralCache;
+  std::unordered_map<const Array*, Z3ASTHandle> constantArrayLiteralCache;
   Z3Builder(bool autoClearConstructCache, const char *z3LogInteractionFile);
   ~Z3Builder();
 
@@ -199,6 +201,8 @@ public:
   // Returns the implication literal, together with the implication assertion if 
   // the expression is unseen.
   std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> assumptionLiteral(ref<Expr> e);
+
+  Z3ASTHandle assumptionLiteralConstArray(const Array* a, std::function<void(const Z3ASTHandle& e)> assertFun);
 
   void clearConstructCache() { constructed.clear(); }
 };

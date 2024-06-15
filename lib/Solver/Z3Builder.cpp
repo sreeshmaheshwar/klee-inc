@@ -491,6 +491,27 @@ std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> Z3Builder::assumptionLiteral(
   return {literal, std::optional<Z3ASTHandle>{implication}};
 }
 
+Z3ASTHandle Z3Builder::assumptionLiteralConstArray(const Array* a, std::function<void(const Z3ASTHandle& e)> assertFun) {
+  auto it = constantArrayLiteralCache.find(a);
+  if (it != constantArrayLiteralCache.end()) {
+    // Implication already asserted.
+    return Z3ASTHandle(it->second);
+  }
+
+  Z3ASTHandle literal = Z3ASTHandle(newAssumptionLiteral(), ctx);
+  constantArrayLiteralCache[a] = literal;
+
+  assert(constant_array_assertions.count(a) == 1 &&
+         "Constant array found in query, but not handled by Z3Builder");
+
+  for (const auto& indexValE : constant_array_assertions[a]) {
+    // Bind all index-value expressions to the same assumption literal.
+    assertFun(impliesExpr(literal, indexValE));
+  }
+
+  return literal;
+}
+
 /** if *width_out!=1 then result is a bitvector,
     otherwise it is a bool */
 Z3ASTHandle Z3Builder::construct(ref<Expr> e, int *width_out) {
