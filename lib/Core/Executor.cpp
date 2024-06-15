@@ -3589,25 +3589,46 @@ void Executor::bindModuleConstants() {
 void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
     *stos << stats::instructions << " " << toKill << "\n";
-    (*stos).flush();
     Statistic *S = theStatisticManager->getStatisticByName("Instructions");
     uint64_t instructions = S ? S->getValue() : 0;
     klee_warning("term-bug at: %lu", instructions);
   }
+
   // randomly select states for early termination
   std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
   klee_warning("term-bug n: %d", arr.size());
-  for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
-    unsigned idx = theRNG.getInt32() % N;
-    // Make two pulls to try and not hit a state that
-    // covered new code.
-    if (arr[idx]->coveredNew)
-      idx = theRNG.getInt32() % N;
 
-    std::swap(arr[idx], arr[N - 1]);
-    klee_warning("term-bug state: %d", arr[N-1]->id);
-    terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
-    // TODO: Do we actually get here? Is instructions the right place?
+  if (stis) {
+    int termIndex;
+    while ((*stis >> termIndex) && termIndex != -1) {
+      if (stos) {
+        *stos << termIndex << " ";
+      }
+      klee_warning("term-bug state: %d", arr[termIndex]->id);
+      terminateStateEarly(*arr[termIndex], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+    }
+  } else {
+    std::vector<int> stateIndex(arr.size());
+    std::iota(stateIndex.begin(), stateIndex.end(), 0);
+    for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
+      unsigned idx = theRNG.getInt32() % N;
+      // Make two pulls to try and not hit a state that
+      // covered new code.
+      if (arr[idx]->coveredNew)
+        idx = theRNG.getInt32() % N;
+
+      std::swap(arr[idx], arr[N - 1]);
+      std::swap(stateIndex[idx], stateIndex[N - 1]);
+      klee_warning("term-bug state: %d", arr[N - 1]->id);
+      terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+      if (stos) {
+        *stos << stateIndex[N - 1] << " ";
+      }
+    }
+  }
+  if (stos) {
+    *stos << -1 << " "; // Signify end of state printing.
+    stos->flush();
   }
 }
 
