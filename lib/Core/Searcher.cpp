@@ -207,7 +207,6 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es) {
 
       double invMD2U = 1. / (md2u ? md2u : 10000);
       if (type == CoveringNew) {
-        // HERE.
         double invCovNew = 0.;
         if (es->instsSinceCovNew)
           invCovNew = 1. / std::max(1, (int) es->instsSinceCovNew - 1000);
@@ -559,9 +558,6 @@ ExecutionState &InterleavedSearcher::selectState() {
   Searcher *s = searchers[--index].get();
   if (index == 0) index = searchers.size();
   ExecutionState& res = s->selectState();
-  // Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-  // uint64_t instructions = S ? S->getValue() : 0;
-  // klee_warning("SELECT %d %lu", res.id, instructions);
   return res;
 }
 

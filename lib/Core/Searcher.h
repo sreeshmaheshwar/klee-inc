@@ -335,8 +335,8 @@ namespace klee {
     void printName(llvm::raw_ostream &os) override;
   };
 
-  // NOTE: This searcher does not delegate. Perhaps it should to mirror memory usage, but
-  // doing so without every using the result (and solely for time/memory mimicking) is
+  // NOTE: This searcher does not delegate. Perhaps it should to better mirror time and memory
+  // consumption, but doing so without ever using the result is
   // very inelegant and makeshift. Instead, it makes more sense for this to be implemented
   // as the API intends, and for us to discuss the lack of mirroring time/memory consumption
   // associated with KLEE's heuristic searchers as a thread to validity. Time itself can of course
