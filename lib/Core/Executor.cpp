@@ -3590,11 +3590,13 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
     *stos << stats::instructions << " " << toKill << "\n";
     (*stos).flush();
-    klee_warning("%lu %lu", stats::instructions, toKill);
+    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    uint64_t instructions = S ? S->getValue() : 0;
+    klee_warning("term-bug at: %lu", instructions);
   }
-  klee_warning("%lu %lu", stats::instructions, toKill);
   // randomly select states for early termination
   std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
+  klee_warning("term-bug n: %d", arr.size());
   for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
     unsigned idx = theRNG.getInt32() % N;
     // Make two pulls to try and not hit a state that
@@ -3603,9 +3605,8 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
       idx = theRNG.getInt32() % N;
 
     std::swap(arr[idx], arr[N - 1]);
-    klee_warning("%d", arr[N-1]->id);
+    klee_warning("term-bug state: %d", arr[N-1]->id);
     terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
-    klee_warning("All done");
     // TODO: Do we actually get here? Is instructions the right place?
   }
 }
