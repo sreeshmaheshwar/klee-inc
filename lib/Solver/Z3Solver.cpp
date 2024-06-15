@@ -27,6 +27,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "klee/System/Time.h"
+
 #include <memory>
 
 namespace {
@@ -46,6 +48,11 @@ llvm::cl::opt<bool> Z3ValidateModels(
     "debug-z3-validate-models", llvm::cl::init(false),
     llvm::cl::desc("When generating Z3 models validate these against the query"),
     llvm::cl::cat(klee::SolvingCat));
+  
+llvm::cl::opt<std::string> CoreDumpFile(
+    "core-times", llvm::cl::init(""),
+    llvm::cl::desc("Print core solver times to this file"),
+    llvm::cl::cat(klee::SolvingCat));
 
 llvm::cl::opt<unsigned>
     Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
@@ -63,6 +70,7 @@ private:
   time::Span timeout;
   SolverRunStatus runStatusCode;
   std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
+  std::unique_ptr<llvm::raw_fd_ostream> coreTimesFile;
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
@@ -123,6 +131,17 @@ Z3SolverImpl::Z3SolverImpl()
                  error.c_str());
     }
     klee_message("Dumping Z3 queries to \"%s\"", Z3QueryDumpFile.c_str());
+  }
+
+  if (!CoreDumpFile.empty()) {
+    std::string error;
+    coreTimesFile = klee_open_output_file(CoreDumpFile, error);
+    if (!coreTimesFile) {
+      klee_error("Error creating file for dumping Z3 queries: %s",
+                 error.c_str());
+    }
+    klee_message("Dumping Z3 queries to \"%s\"", CoreDumpFile.c_str());
+    *coreTimesFile << "Instructions,Time" << "\n";
   }
 
   // Set verbosity
@@ -241,8 +260,8 @@ bool Z3SolverImpl::computeInitialValues(
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
-
   TimerStatIncrementer t(stats::queryTime);
+  auto startTime = time::getWallTime();
   // NOTE: Z3 will switch to using a slower solver internally if push/pop are
   // used so for now it is likely that creating a new solver each time is the
   // right way to go until Z3 changes its behaviour.
@@ -300,6 +319,16 @@ bool Z3SolverImpl::internalRunSolver(
                                        hasSolution);
 
   Z3_solver_dec_ref(builder->ctx, theSolver);
+
+  if (coreTimesFile) {
+    auto lastQueryDuration = time::getWallTime() - startTime;
+
+    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    uint64_t instructions = S ? S->getValue() : 0;
+
+    *coreTimesFile << instructions << "," << lastQueryDuration.toMicroseconds() << "\n";
+  }
+
   // Clear the builder's cache to prevent memory usage exploding.
   // By using ``autoClearConstructCache=false`` and clearning now
   // we allow Z3_ast expressions to be shared from an entire
