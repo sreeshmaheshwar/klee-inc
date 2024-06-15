@@ -3589,7 +3589,10 @@ void Executor::bindModuleConstants() {
 void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
     *stos << stats::instructions << " " << toKill << "\n";
+    (*stos).flush();
+    klee_warning("%lu %lu", stats::instructions, toKill);
   }
+  klee_warning("%lu %lu", stats::instructions, toKill);
   // randomly select states for early termination
   std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
   for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
@@ -3601,6 +3604,7 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
 
     std::swap(arr[idx], arr[N - 1]);
     terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+    // TODO: Do we actually get here? Is instructions the right place?
   }
 }
 
