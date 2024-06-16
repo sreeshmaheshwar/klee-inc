@@ -8,7 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "STPSolver.h"
-#include "Z3Solver.h"
+// #include "Z3Solver.h"
+#include "Z3PoolingSolver.h"
 #include "MetaSMTSolver.h"
 
 #include "klee/Solver/SolverCmdLine.h"
@@ -46,7 +47,7 @@ std::unique_ptr<Solver> createCoreSolver(CoreSolverType cst) {
   case Z3_SOLVER:
 #ifdef ENABLE_Z3
     klee_message("Using Z3 solver backend");
-    return std::make_unique<Z3Solver>();
+    return std::make_unique<Z3PoolingSolver>();
 #else
     klee_message("Not compiled with Z3 support");
     return NULL;

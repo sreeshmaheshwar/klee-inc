@@ -483,7 +483,6 @@ bool IndependentSolver::computeInitialValues(const Query& query,
   // FIXME: When we switch to C++11 this should be a std::unique_ptr so we don't need
   // to remember to manually call delete
   std::list<IndependentElementSet> *factors = getAllIndependentConstraintsSets(query);
-  klee_warning("Size: %lu", factors->size());
 
   //Used to rearrange all of the answers into the correct order
   std::map<const Array*, std::vector<unsigned char> > retMap;
