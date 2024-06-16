@@ -17,12 +17,17 @@
 namespace {
 
 llvm::cl::opt<unsigned>
-    PoolSize("pool-size", llvm::cl::init(15),
-                     llvm::cl::desc("Number of Z3 solvers in the pool (default=15)"),
+    PoolSize("pool-size", llvm::cl::init(14),
+                     llvm::cl::desc("Number of Z3 solvers in the pool (default=14)"),
                      llvm::cl::cat(klee::SolvingCat));
 llvm::cl::opt<bool>
     WarnSolverChoices("pool-warn", llvm::cl::init(false),
                      llvm::cl::desc("Warn pool solver choices (default=false)"),
+                     llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<unsigned>
+    PercentLeeway("pool-percent", llvm::cl::init(5),
+                     llvm::cl::desc("Percentage of pool leeway to allow (default=5)"),
                      llvm::cl::cat(klee::SolvingCat));
 
 }
@@ -103,7 +108,9 @@ bool Z3PoolingSolverImpl::internalRunSolver(
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   Query query(_query.constraintsToWrite, _query.expr); // Use the constraints to write exclusively (the whole set).
 
-  int bestId = -1, maxLCP = 0;
+  int maxLCP = 0;
+  std::vector<int> lcps(PoolSize);
+  size_t largestSize = 0;
   for (auto id = 0u; id < PoolSize; ++id) {
     const auto& assertionStack = pool[id]->assertionStack;
     auto stack_it = assertionStack.begin();
@@ -143,18 +150,31 @@ bool Z3PoolingSolverImpl::internalRunSolver(
       advance_expr_to_write();
     }
 
-    if (std::distance(assertionStack.begin(), stack_it) > maxLCP) {
-      maxLCP = std::distance(assertionStack.begin(), stack_it);
-      bestId = id;
-    }
+    lcps[id] = std::distance(assertionStack.begin(), stack_it);
+    maxLCP = std::max(maxLCP, lcps[id]);
+    largestSize = std::max(largestSize, assertionStack.size());
   }
 
-  if (bestId < 0) {
-    // We need to pick one to evict - we use LRU. TODO: Iterate on this.
-    bestId = (int) (min_element(lastUsed.begin(), lastUsed.end()) - lastUsed.begin());
-    if (WarnSolverChoices)
-      klee_warning("Evicting solver %d", bestId);
+  double maxFraction = maxLCP / ((double) query.constraints.size() + 1);
+
+  int bestId = -1;
+  for (auto id = 0u; id < PoolSize; ++id) {
+    if (abs(maxFraction - lcps[id] / ((double) pool[id]->assertionStack.size() + 1)) <= PercentLeeway / 100.0 &&
+        pool[id]->assertionStack.size() <= largestSize) {
+      bestId = id;
+      largestSize = pool[id]->assertionStack.size();
+    }
   }
+  if (bestId < 0) {
+    klee_error("Delegation failed, no solver was found");
+  }
+
+  // if (bestId < 0) {
+  //   // We need to pick one to evict - we use LRU. TODO: Iterate on this.
+  //   bestId = (int) (min_element(lastUsed.begin(), lastUsed.end()) - lastUsed.begin());
+  //   if (WarnSolverChoices)
+  //     klee_warning("Evicting solver %d", bestId);
+  // }
 
   lastUsed[bestId] = ++count;
   previousId = bestId;
