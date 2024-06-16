@@ -105,6 +105,7 @@ Z3Builder::~Z3Builder() {
   assumptionLiteralCache.clear();
   _arr_hash.clear();
   constant_array_assertions.clear();
+  constantArrayLiteralCache.clear();
   Z3_del_context(ctx);
   if (z3LogInteractionFile.length() > 0) {
     Z3_close_log();
