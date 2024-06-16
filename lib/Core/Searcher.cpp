@@ -585,7 +585,8 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
     klee_error("No output file specified but outputting searcher used");
   }
   std::string error;
-  sos = klee_open_output_file(fileName, error);
+  fileName.append(".gz");
+  sos = klee_open_compressed_output_file(fileName, error);
   if (!sos) {
     klee_error("Could not open file for outputting searcher %s : %s", fileName.c_str(), error.c_str());
   }
