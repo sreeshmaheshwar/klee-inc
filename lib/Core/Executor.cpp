@@ -541,9 +541,11 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
 
   if (!TermReplayOutputFile.empty()) {
     std::string error;
-    stos = klee_open_output_file(TermReplayOutputFile, error);
+    std::string path = TermReplayOutputFile;
+    path.append(".gz");
+    stos = klee_open_compressed_output_file(path, error);
     if (!stos) {
-      klee_error("Could not open file for outputting searcher %s : %s", TermReplayOutputFile.c_str(), error.c_str());
+      klee_error("Could not open file for outputting searcher %s : %s", path.c_str(), error.c_str());
     }
   }
 
