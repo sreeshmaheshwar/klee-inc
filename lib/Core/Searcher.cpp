@@ -23,6 +23,7 @@
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
+#include "klee/Support/CompressionStream.h"
 #include "klee/System/Time.h"
 
 #include "klee/Support/CompilerWarning.h"
@@ -586,6 +587,13 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
   }
   std::string error;
   fileName.append(".gz");
+
+  auto f = std::make_unique<compressed_fd_istream>(fileName, error);
+  for (int i = 0; i < 1000; ++i) {
+    klee_warning("%d", f->nextInt().value());
+  }
+  klee_error("Done!");
+
   sos = klee_open_compressed_output_file(fileName, error);
   if (!sos) {
     klee_error("Could not open file for outputting searcher %s : %s", fileName.c_str(), error.c_str());
@@ -594,7 +602,9 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
 
 ExecutionState &OutputtingSearcher::selectState() {
   ExecutionState& res = searcher->selectState();
-  *sos << res.id << "\n"; // Do not flush for efficiency.
+  // *sos << res.id << "\n"; // Do not flush for efficiency.
+  uint32_t id = res.id;
+  sos->write(reinterpret_cast<const char*>(&id), sizeof(id));
   return res;
 }
 

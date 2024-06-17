@@ -13,6 +13,18 @@
 #include "llvm/Support/raw_ostream.h"
 #include "zlib.h"
 
+#include <cassert>
+#include <errno.h>
+#include <fcntl.h>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <vector>
+#include <optional>
+
 namespace klee {
 const size_t BUFSIZE = 128 * 1024;
 
@@ -41,6 +53,47 @@ public:
 
   ~compressed_fd_ostream();
 };
+
+// class compressed_fd_istream {
+//   int FD;
+//   std::vector<uint8_t> buffer;
+//   z_stream strm;
+//   std::ifstream fileStream;
+//   bool eofReached;
+
+// public:
+//   compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
+//   ~compressed_fd_istream();
+
+//   std::optional<int> nextInt();
+//   bool eof() const { return eofReached && strm.avail_in == 0 && strm.avail_out == BUFSIZE; }
+
+// private:
+//   void fillBuffer();
+//   bool decompressToBuffer(size_t Size);
+// };
+
+class compressed_fd_istream {
+  std::ifstream fileStream;
+  std::vector<uint8_t> inputBuffer;
+  std::vector<uint8_t> outputBuffer;
+  z_stream strm;
+  size_t outputBufferPos;
+  size_t outputBufferSize;
+  bool eofReached;
+
+public:
+  compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
+  ~compressed_fd_istream();
+
+  std::optional<int> nextInt();
+  bool eof() const { return eofReached && strm.avail_in == 0 && strm.avail_out == outputBufferSize; }
+
+private:
+  void fillInputBuffer();
+  bool decompressToOutputBuffer(size_t size);
+};
+
 }
 
 #endif /* KLEE_COMPRESSIONSTREAM_H */
