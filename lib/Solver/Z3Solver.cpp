@@ -283,7 +283,7 @@ bool Z3SolverImpl::internalRunSolver(
   };
 
   // LCP between the assertion stack and the query constraints.
-  while (stack_it != assertionStack.end() && !all_written() && !(*stack_it)->compare(*get_expr_to_write())) {
+  while (stack_it != assertionStack.end() && !all_written() && (*stack_it)->hash() == get_expr_to_write()->hash()) {
     ++stack_it;
     advance_expr_to_write();
     // ++stats::commonConstraints; // TODO: Add back.
