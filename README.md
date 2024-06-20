@@ -1,4 +1,4 @@
-# Individual Project README
+# KLEE Individual Project
 
 ## Source Code
 
