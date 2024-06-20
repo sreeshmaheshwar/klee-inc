@@ -1,0 +1,36 @@
+\documentclass[border=10pt]{standalone}
+\usepackage{xcolor}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\begin{document}
+\begin{tikzpicture}
+    \begin{axis}[
+        width  = 1.5 * \textwidth,
+        height = 8cm,
+        major x tick style = transparent,
+        % tickwidth=10,
+        ybar=0,
+        bar width=10pt,
+        % ymajorgrids = true,
+        ylabel = {SolverQueryConstructs},
+        symbolic x coords={base64,chmod,csplit,dircolors,factor,ln,mkfifo},
+        xtick = data,
+        scaled y ticks = false,
+        enlarge x limits=0.05,
+        ymin=0,
+        legend cell align=left,
+        legend style={
+                at={(0.98,0.88)},
+                anchor=south east,
+                % column sep=1ex
+        }
+    ]
+        \addplot[style={cyan,fill=cyan,mark=none}, draw=black]
+	coordinates {(base64,826534) (chmod,827259) (csplit,490659) (dircolors,641483) (factor,523030) (ln,242089) (mkfifo,439714)};
+\addplot[style={orange,fill=orange,mark=none}, draw=black]
+	coordinates {(base64,475519) (chmod,518089) (csplit,289829) (dircolors,269753) (factor,257236) (ln,146561) (mkfifo,320948)};
+
+        \legend{Mainline KLEE,PoolUnsimp}
+    \end{axis}
+\end{tikzpicture}
+\end{document}
