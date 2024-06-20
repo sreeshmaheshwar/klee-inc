@@ -28,7 +28,7 @@ Here we find all other strategies (that were used in the report for DFS). Some m
 - LCP-PP: https://github.com/sreeshmaheshwar/klee/pull/19
 - Stack-Basic: https://github.com/sreeshmaheshwar/klee/pull/10
 - Basic-Stack Write-New: https://github.com/sreeshmaheshwar/klee/pull/10
-- Basic-Stack Assert Variant (we mention in the report, on page 30, that we implement a strategy that errors based on constraint set prefixes to double check `basic-stack`): https://github.com/sreeshmaheshwar/klee/pull/7/files 
+- Basic-Stack Assert Variant (we mention in the report, on page 30, that we implement a strategy that errors based on constraint set prefixes to double check `basic-stack`): https://github.com/sreeshmaheshwar/klee/pull/7
 
 ## Evaluation/Experiment Code
 
