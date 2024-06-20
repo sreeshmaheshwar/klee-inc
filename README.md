@@ -22,7 +22,7 @@ Note that optimisations (caches and constraint set simplification) can be enable
 
 Here we find all other strategies (that were used in the report for DFS). Some may support deterministic state replaying but most do not as it is unneeded for DFS. Note that many strategies above orgiginated from DFS ones so this is only those used for DFS that were **not** used elsewhere.
 
-- CSA (unoptmisied): https://github.com/sreeshmaheshwar/klee/pull/3/files
+- CSA (unoptmisied): https://github.com/sreeshmaheshwar/klee/pull/3
 - Simplify-Early variant of Partition-Early: https://github.com/sreeshmaheshwar/klee/pull/21
 - Partition-Early (simplification can be toggled via command line option `--rewrite-equalities`): https://github.com/sreeshmaheshwar/klee/pull/14
 - LCP-PP: https://github.com/sreeshmaheshwar/klee/pull/19
