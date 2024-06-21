@@ -29,6 +29,8 @@
 #include "klee/Module/KModule.h"
 #include "klee/System/Time.h"
 
+#include "klee/Support/FileHandling.h"
+
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -171,12 +173,12 @@ private:
   /// Used for deterministic replaying of state termination on memory
   /// limit being reached. The number of states to terminate is
   /// read from this stream. 
-  std::unique_ptr<std::istringstream> stis;
+  std::unique_ptr<BufferedTypedIstream> stis;
   
   /// Used for deterministic replaying of state termination on memory
   /// limit being reached. The number of states to terminate is
   /// outputted to this stream. 
-  std::unique_ptr<llvm::raw_ostream> stos; 
+  std::unique_ptr<BufferedTypedOstream> stos; 
 
   bool nextTerminationPresent = false;
   std::uint64_t nextInstructionsToTerminate;

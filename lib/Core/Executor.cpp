@@ -531,11 +531,10 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
 
   if (!TermReplayInputFile.empty()) {
     std::string error;
-    auto buffer = klee_open_input_file(TermReplayInputFile, error);
-    if (!buffer) {
+    stis = std::move(klee_open_buffered_typed_input_file(TermReplayInputFile, error));
+    if (!stis) {
       klee_error("Could not open file for inputting search %s : %s", TermReplayInputFile.c_str(), error.c_str());
     }
-    stis = std::make_unique<std::istringstream>(buffer->getBuffer().str());
     advanceTerminationReplay();
   }
 
@@ -543,7 +542,7 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
     std::string error;
     std::string path = TermReplayOutputFile;
     path.append(".gz");
-    stos = klee_open_compressed_output_file(path, error);
+    stos = klee_open_buffered_typed_output_file(path, error);
     if (!stos) {
       klee_error("Could not open file for outputting searcher %s : %s", path.c_str(), error.c_str());
     }
@@ -1330,7 +1329,17 @@ void Executor::bindArgument(KFunction *kf, unsigned index,
 
 void Executor::advanceTerminationReplay() {
   assert(stis && "State termination input stream should be present to be advanced.");
-  nextTerminationPresent = static_cast<bool>(*stis >> nextInstructionsToTerminate >> nextNumberToTerminate);
+
+  auto nextInstructionsToTerminateOpt = stis->next<std::uint64_t>();
+  auto nextNumberToTerminateOpt = stis->next<unsigned long>();
+
+  if (!nextInstructionsToTerminateOpt || !nextNumberToTerminateOpt) {
+    nextTerminationPresent = false;
+  } else {
+    nextInstructionsToTerminate = nextInstructionsToTerminateOpt.value();
+    nextNumberToTerminate = nextNumberToTerminateOpt.value();
+    nextTerminationPresent = true;
+  }
 }
 
 ref<Expr> Executor::toUnique(const ExecutionState &state, 
@@ -3590,24 +3599,26 @@ void Executor::bindModuleConstants() {
 
 void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
-    *stos << stats::instructions << " " << toKill << "\n";
-    // Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-    // uint64_t instructions = S ? S->getValue() : 0;
-    // klee_warning("term-bug at: %lu", instructions);
+    // *stos << stats::instructions << " " << toKill << "\n";
+    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    std::uint64_t instructions = S ? S->getValue() : 0;
+    stos->write(instructions);
+    stos->write(toKill);
+    klee_warning("term-bug at: %lu", instructions);
   }
 
   // randomly select states for early termination
   std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
-  // klee_warning("term-bug n: %d", arr.size());
 
   if (stis) {
-    int termIndex;
-    while ((*stis >> termIndex) && termIndex != -1) {
-      if (stos) {
-        *stos << termIndex << " ";
+    while (auto termIndex = stis->next<int>()) {
+      if (*termIndex == -1) {
+        break;
       }
-      // klee_warning("term-bug state: %d", arr[termIndex]->id);
-      terminateStateEarly(*arr[termIndex], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+      if (stos) {
+        stos->write(*termIndex);
+      }
+      terminateStateEarly(*arr[*termIndex], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
     }
   } else {
     std::vector<int> stateIndex(arr.size());
@@ -3624,13 +3635,15 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
       // klee_warning("term-bug state: %d", arr[N - 1]->id);
       terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
       if (stos) {
-        *stos << stateIndex[N - 1] << " ";
+        stos->write(stateIndex[N - 1]);
+        // *stos << stateIndex[N - 1] << " ";
       }
     }
   }
   if (stos) {
-    *stos << -1 << " "; // Signify end of state printing.
-    stos->flush();
+    stos->write(-1);
+    // *stos << -1 << " "; // Signify end of state printing.
+    // stos->flush();
   }
 }
 
