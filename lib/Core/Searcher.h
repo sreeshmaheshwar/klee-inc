@@ -322,10 +322,10 @@ namespace klee {
 
   class OutputtingSearcher final : public Searcher {
     std::unique_ptr<Searcher> searcher;
-    std::unique_ptr<llvm::raw_ostream> sos; // State Output Stream. 
+    std::unique_ptr<BufferedTypedOstream> sos; // State Output Stream. 
 
   public:
-    explicit OutputtingSearcher(Searcher* _searcher, std::unique_ptr<llvm::raw_ostream> _sos);
+    explicit OutputtingSearcher(Searcher* _searcher, std::unique_ptr<BufferedTypedOstream> _sos);
     explicit OutputtingSearcher(Searcher* _searcher, std::string fileName);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,

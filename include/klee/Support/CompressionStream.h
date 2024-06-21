@@ -86,8 +86,8 @@ public:
   compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
   ~compressed_fd_istream();
 
-  std::optional<int> nextInt();
-  bool eof() const { return eofReached && strm.avail_in == 0 && strm.avail_out == outputBufferSize; }
+  template <typename T>
+  std::optional<T> next();
 
 private:
   void fillInputBuffer();
