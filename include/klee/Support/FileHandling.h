@@ -37,8 +37,8 @@ klee_open_compressed_output_file(const std::string &path, std::string &error);
 // buffered reading and writing with smaller types outputted.
 
 class BufferedTypedOstream {
-  public:
     std::unique_ptr<llvm::raw_ostream> stream;
+  public:
 
     BufferedTypedOstream(std::unique_ptr<llvm::raw_ostream> _stream) : stream(std::move(_stream)) {}
 
