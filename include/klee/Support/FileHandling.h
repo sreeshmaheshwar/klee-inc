@@ -20,6 +20,7 @@ DISABLE_WARNING_POP
 #include <string>
 
 #include <llvm/Support/MemoryBuffer.h>
+#include "klee/Support/CompressionStream.h"
 
 namespace klee {
 std::unique_ptr<llvm::MemoryBuffer>
@@ -31,6 +32,39 @@ klee_open_output_file(const std::string &path, std::string &error);
 #ifdef HAVE_ZLIB_H
 std::unique_ptr<llvm::raw_ostream>
 klee_open_compressed_output_file(const std::string &path, std::string &error);
+
+// We encapsulate both compressed_fd_ostream and compressed_fd_istream below for
+// buffered reading and writing with smaller types outputted.
+
+class BufferedTypedOstream {
+  public:
+    std::unique_ptr<llvm::raw_ostream> stream;
+
+    BufferedTypedOstream(std::unique_ptr<llvm::raw_ostream> _stream) : stream(std::move(_stream)) {}
+
+    template <typename T> void write(const T &value) {
+        stream->write(reinterpret_cast<const char *>(&value), sizeof(T));
+    }
+};
+
+class BufferedTypedIstream {
+    std::unique_ptr<compressed_fd_istream> stream;
+
+  public:
+    BufferedTypedIstream(std::unique_ptr<compressed_fd_istream> _stream) : stream(std::move(_stream)) {}
+
+    template <typename T>
+    std::optional<T> next() {
+        return stream->next<T>();
+    }
+}; 
+
+std::unique_ptr<BufferedTypedOstream> klee_open_buffered_typed_output_file(
+    const std::string &path, std::string &error);
+
+std::unique_ptr<BufferedTypedIstream> klee_open_buffered_typed_input_file(
+    const std::string &path, std::string &error);
+
 #endif
 } // namespace klee
 

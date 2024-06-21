@@ -59,5 +59,16 @@ klee_open_compressed_output_file(const std::string &path, std::string &error) {
   }
   return f;
 }
+
+std::unique_ptr<BufferedTypedOstream>
+klee_open_buffered_typed_output_file(const std::string &path, std::string &error) {
+  return std::make_unique<BufferedTypedOstream>(klee_open_compressed_output_file(path, error));
+}
+
+std::unique_ptr<BufferedTypedIstream>
+klee_open_buffered_typed_input_file(const std::string &path, std::string &error) {
+  return std::make_unique<BufferedTypedIstream>(std::make_unique<compressed_fd_istream>(path, error));
+}
+
 #endif
 }
