@@ -255,24 +255,43 @@ bool compressed_fd_istream::decompressToOutputBuffer(size_t size) {
   return true;
 }
 
-std::optional<int> compressed_fd_istream::nextInt() {
-  size_t intSize = sizeof(int);
+// std::optional<int> compressed_fd_istream::nextInt() {
+//   size_t intSize = sizeof(int);
 
-  if (outputBufferPos + intSize > outputBufferSize) {
+//   if (outputBufferPos + intSize > outputBufferSize) {
+//     if (!decompressToOutputBuffer(BUFSIZE)) {
+//       return std::nullopt;
+//     }
+//   }
+
+//   if (outputBufferPos + intSize > outputBufferSize) {
+//     return std::nullopt;
+//   }
+
+//   // klee_warning("%c", outputBuffer[outputBufferPos]);
+
+//   int value = *reinterpret_cast<int *>(outputBuffer.data() + outputBufferPos);
+//   outputBufferPos += intSize;
+
+//   return value;
+// }
+
+template <typename T>
+std::optional<T> compressed_fd_istream::next() {
+  // static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
+  size_t valueSize = sizeof(T);
+  if (outputBufferPos + valueSize > outputBufferSize) {
     if (!decompressToOutputBuffer(BUFSIZE)) {
       return std::nullopt;
     }
   }
-
-  if (outputBufferPos + intSize > outputBufferSize) {
+  if (outputBufferPos + valueSize > outputBufferSize) {
     return std::nullopt;
   }
-
-  // klee_warning("%c", outputBuffer[outputBufferPos]);
-
-  int value = *reinterpret_cast<int *>(outputBuffer.data() + outputBufferPos);
-  outputBufferPos += intSize;
-
+  T value;
+  std::memcpy(&value, outputBuffer.data() + outputBufferPos, valueSize);
+  // Advance buffer ptr.
+  outputBufferPos += valueSize;
   return value;
 }
 
