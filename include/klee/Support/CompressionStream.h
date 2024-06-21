@@ -82,16 +82,30 @@ class compressed_fd_istream {
   size_t outputBufferSize;
   bool eofReached;
 
+  void fillInputBuffer();
+  bool decompressToOutputBuffer(size_t size);
+
 public:
   compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
   ~compressed_fd_istream();
 
   template <typename T>
-  std::optional<T> next();
-
-private:
-  void fillInputBuffer();
-  bool decompressToOutputBuffer(size_t size);
+  std::optional<T> next() {
+    size_t valueSize = sizeof(T);
+    if (outputBufferPos + valueSize > outputBufferSize) {
+      if (!decompressToOutputBuffer(BUFSIZE)) {
+        return std::nullopt;
+      }
+    }
+    if (outputBufferPos + valueSize > outputBufferSize) {
+      return std::nullopt;
+    }
+    T value;
+    std::memcpy(&value, outputBuffer.data() + outputBufferPos, valueSize);
+    // Advance buffer ptr.
+    outputBufferPos += valueSize;
+    return value;
+  }
 };
 
 }

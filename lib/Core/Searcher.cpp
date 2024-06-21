@@ -602,10 +602,10 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
 
 ExecutionState &OutputtingSearcher::selectState() {
   ExecutionState& res = searcher->selectState();
-  klee_warning("Writing state %d", res.id);
-  // sos->write(res.id);
-  sos->stream->write(reinterpret_cast<const char *>(&res.id), sizeof(res.id));
-  sos->stream->flush();
+  // klee_warning("Writing state %d", res.id);
+  sos->write(res.id);
+  // sos->stream->write(reinterpret_cast<const char *>(&res.id), sizeof(res.id));
+  // sos->stream->flush();
   return res;
 }
 
@@ -625,7 +625,7 @@ void OutputtingSearcher::printName(llvm::raw_ostream &os) {
   os << "</OutputtingSearcher>\n";
 }
 
-InputtingSearcher::InputtingSearcher(std::unique_ptr<std::istringstream> _sis)
+InputtingSearcher::InputtingSearcher(std::unique_ptr<BufferedTypedIstream> _sis)
   : sis(std::move(_sis)) {}
 
 InputtingSearcher::InputtingSearcher(std::string fileName) {
@@ -633,20 +633,27 @@ InputtingSearcher::InputtingSearcher(std::string fileName) {
     klee_error("No input file specified but inputting search used");
   }
   std::string error;
-  auto buffer = klee_open_input_file(fileName, error);
-  if (!buffer) {
+  sis = std::move(klee_open_buffered_typed_input_file(fileName, error));
+  if (!sis) {
     klee_error("Could not open file for inputting search %s : %s", fileName.c_str(), error.c_str());
   }
-  sis = std::make_unique<std::istringstream>(buffer->getBuffer().str());
 }
 
 ExecutionState &InputtingSearcher::selectState() {
-  std::uint32_t id;
-  *sis >> id;
-  if (!byId.count(id)) {
+  auto optionalId = sis->next<std::uint32_t>();
+  if (!optionalId) {
+    klee_error("No more states to read from inputting searcher");
+  }
+  // auto id = optionalId.value();
+  // if (!byId.count(id)) {
+  //   klee_error("Inputted state not present for selectState()");
+  // }
+  // return *byId[id];
+  auto it = byId.find(optionalId.value());
+  if (it == byId.end()) {
     klee_error("Inputted state not present for selectState()");
   }
-  return *byId[id];
+  return *it->second;
 }
 
 void InputtingSearcher::update(ExecutionState *current,

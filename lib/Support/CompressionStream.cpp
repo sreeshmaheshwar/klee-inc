@@ -234,12 +234,10 @@ bool compressed_fd_istream::decompressToOutputBuffer(size_t size) {
   outputBufferPos = 0;
   strm.next_out = outputBuffer.data();
   strm.avail_out = size;
-
   while (strm.avail_out > 0) {
     if (strm.avail_in == 0) {
       fillInputBuffer();
     }
-
     const auto ret = inflate(&strm, Z_NO_FLUSH);
     if (ret == Z_STREAM_END) {
       outputBufferSize = size - strm.avail_out;
@@ -250,7 +248,6 @@ bool compressed_fd_istream::decompressToOutputBuffer(size_t size) {
       return false;
     }
   }
-
   outputBufferSize = size;
   return true;
 }
@@ -275,25 +272,6 @@ bool compressed_fd_istream::decompressToOutputBuffer(size_t size) {
 
 //   return value;
 // }
-
-template <typename T>
-std::optional<T> compressed_fd_istream::next() {
-  // static_assert(std::is_trivially_copyable<T>::value, "T must be trivially copyable");
-  size_t valueSize = sizeof(T);
-  if (outputBufferPos + valueSize > outputBufferSize) {
-    if (!decompressToOutputBuffer(BUFSIZE)) {
-      return std::nullopt;
-    }
-  }
-  if (outputBufferPos + valueSize > outputBufferSize) {
-    return std::nullopt;
-  }
-  T value;
-  std::memcpy(&value, outputBuffer.data() + outputBufferPos, valueSize);
-  // Advance buffer ptr.
-  outputBufferPos += valueSize;
-  return value;
-}
 
 }
 #endif

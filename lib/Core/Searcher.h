@@ -344,11 +344,11 @@ namespace klee {
   // time added) to manufacture a reasonable result (which itself is another threat to validity but
   // a lesser one) .
   class InputtingSearcher final : public Searcher {
-    std::unique_ptr<std::istringstream> sis; // State Output Stream. 
+    std::unique_ptr<BufferedTypedIstream> sis; // State Output Stream. 
     std::map<std::uint32_t, ExecutionState*> byId; // Maps ID to state.
 
   public:
-    explicit InputtingSearcher(std::unique_ptr<std::istringstream> _sis);
+    explicit InputtingSearcher(std::unique_ptr<BufferedTypedIstream> _sis);
     explicit InputtingSearcher(std::string fileName);
     ExecutionState &selectState() override;
     void update(ExecutionState *current,
