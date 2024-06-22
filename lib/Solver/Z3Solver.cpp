@@ -59,6 +59,11 @@ llvm::cl::opt<unsigned>
     Z3VerbosityLevel("debug-z3-verbosity", llvm::cl::init(0),
                      llvm::cl::desc("Z3 verbosity level (default=0)"),
                      llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<unsigned>
+    Z3IncTimeout("inc-timeout", llvm::cl::init(0),
+                     llvm::cl::desc("Timeout for Z3 Solver2, 0 to disable (default=0)"),
+                     llvm::cl::cat(klee::SolvingCat));
 }
 
 #include "llvm/Support/ErrorHandling.h"
@@ -129,9 +134,11 @@ Z3SolverImpl::Z3SolverImpl()
   timeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "timeout");
   setCoreSolverTimeout(timeout);
 
-  s2TimeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "combined_solver.solver2_timeout");
-  Z3_params_set_uint(builder->ctx, solverParameters, s2TimeoutParamStrSymbol,
-                       5000); // 5 second incremental timeout.
+  if (Z3IncTimeout > 0) {
+    s2TimeoutParamStrSymbol = Z3_mk_string_symbol(builder->ctx, "combined_solver.solver2_timeout");
+    Z3_params_set_uint(builder->ctx, solverParameters, s2TimeoutParamStrSymbol,
+                        Z3IncTimeout); // 5 second incremental timeout.
+  }
 
   if (!Z3QueryDumpFile.empty()) {
     std::string error;
