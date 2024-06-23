@@ -277,7 +277,9 @@ bool Z3SolverImpl::internalRunSolver(
   // We created a backtracking point to the empty solver state, via `push`,
   // and continually return to it.
 
-  // if (++stats::solverQueries % 1000 == 0) {
+  ++stats::solverQueries;
+
+  // if (stats::solverQueries % 1000 == 0) {
   //   Z3_solver_pop(builder->ctx, z3Solver, 1);
   //   Z3_solver_push(builder->ctx, z3Solver);
   //   builder->assumptionLiteralCache.clear();
