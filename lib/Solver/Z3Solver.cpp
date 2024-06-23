@@ -139,7 +139,7 @@ Z3SolverImpl::Z3SolverImpl()
   z3Solver = Z3_mk_solver(builder->ctx);
   Z3_solver_inc_ref(builder->ctx, z3Solver);
   Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
-  Z3_solver_push(builder->ctx, z3Solver);
+  // Z3_solver_push(builder->ctx, z3Solver);
 }
 
 Z3SolverImpl::~Z3SolverImpl() {
@@ -253,15 +253,15 @@ bool Z3SolverImpl::internalRunSolver(
   TimerStatIncrementer t(stats::queryTime);
   auto startTime = time::getWallTime();
 
-  // Heuristic - every 1000 queries, clear solver state.
-  // We created a backtracking point to the empty solver state, via `push`,
-  // and continually return to it.
-  if (++stats::solverQueries % 1000 == 0) {
-    Z3_solver_pop(builder->ctx, z3Solver, 1);
-    Z3_solver_push(builder->ctx, z3Solver);
-    builder->assumptionLiteralCache.clear();
-    builder->constantArrayLiteralCache.clear();
-  }
+  // // Heuristic - every 1000 queries, clear solver state.
+  // // We created a backtracking point to the empty solver state, via `push`,
+  // // and continually return to it.
+  // if (++stats::solverQueries % 1000 == 0) {
+  //   Z3_solver_pop(builder->ctx, z3Solver, 1);
+  //   Z3_solver_push(builder->ctx, z3Solver);
+  //   builder->assumptionLiteralCache.clear();
+  //   builder->constantArrayLiteralCache.clear();
+  // }
 
   std::vector<Z3ASTHandle> assumptions;
   ConstantArrayFinder constant_arrays_in_query;
