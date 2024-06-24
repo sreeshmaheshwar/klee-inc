@@ -59,6 +59,7 @@ private:
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
+  ::Z3_symbol s2TimeoutParamStrSymbol;
 
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
