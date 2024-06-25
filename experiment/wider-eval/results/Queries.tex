@@ -1,0 +1,38 @@
+\documentclass[border=10pt]{standalone}
+\usepackage{xcolor}
+\usepackage{pgfplots}
+\usepackage{tikz}
+\begin{document}
+\begin{tikzpicture}
+    \begin{axis}[
+        width  = 1.5 * \textwidth,
+        height = 8cm,
+        major x tick style = transparent,
+        % tickwidth=10,
+        ybar=0,
+        bar width=10pt,
+        % ymajorgrids = true,
+        ylabel = {Queries},
+        symbolic x coords={base64,dircolors,du,fold,ln,mkfifo,nice,od,unexpand},
+        xtick = data,
+        scaled y ticks = false,
+        enlarge x limits=0.05,
+        ymin=0,
+        legend cell align=left,
+        legend style={
+                at={(0.98,0.88)},
+                anchor=south east,
+                % column sep=1ex
+        }
+    ]
+        \addplot[style={cyan,fill=cyan,mark=none}, draw=black]
+	coordinates {(base64,79345715) (dircolors,5746946) (du,5882022) (fold,20182982) (ln,3624974) (mkfifo,1185167371) (nice,975510879) (od,171369214) (unexpand,17914203)};
+\addplot[style={orange,fill=orange,mark=none}, draw=black]
+	coordinates {(base64,79345715) (dircolors,5746946) (du,5882022) (fold,20182982) (ln,3624974) (mkfifo,1185167371) (nice,975510879) (od,171369214) (unexpand,17914203)};
+\addplot[style={lime,fill=lime,mark=none}, draw=black]
+	coordinates {(base64,79345715) (dircolors,5746946) (du,5882022) (fold,20182982) (ln,3624974) (mkfifo,1185167371) (nice,975510879) (od,171369214) (unexpand,17914203)};
+
+        \legend{Mainline,Solver2-Global,Independent Pooling}
+    \end{axis}
+\end{tikzpicture}
+\end{document}

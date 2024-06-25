@@ -1,0 +1,23 @@
+\documentclass[border=10pt]{standalone}
+\usepackage{booktabs}
+\usepackage{makecell}
+\begin{document}
+\begin{table}[h!]
+    \centering
+    \begin{tabular}{lccccccccccr}
+        \toprule
+        Program   & \makecell{Time (s)} & \makecell{Solver                                                                 \\Chain\\Time (s)} & \makecell{Core\\Solver\\Time (s)} & \makecell{Solver\\Chain\\Queries} & \makecell{Core\\Solver\\Queries} & \makecell{External\\Calls} & \makecell{States} & \makecell{Max\\Active\\States} & \makecell{States\\Terminated\\Early} & \makecell{Max\\Memory\\(MiB)} \\
+        \midrule
+        base64 & 3323.54 & 3094.59 & 3012.14 & 79345715 & 21946 & 50727 & 71115 & 51802 & 0 & 961.34 \\
+dircolors & 4096.28 & 4063.96 & 4035.77 & 5746946 & 11420 & 3059 & 8553 & 7287 & 0 & 328.91 \\
+du & 4051.29 & 4026.27 & 4022.94 & 5882022 & 3686 & 2974 & 3061 & 2596 & 0 & 250.21 \\
+fold & 4171.08 & 4114.99 & 4073.16 & 20182982 & 21478 & 5511 & 26439 & 22611 & 0 & 952.61 \\
+ln & 433.45 & 425.56 & 423.03 & 3624974 & 3138 & 1893 & 1810 & 1493 & 0 & 273.98 \\
+mkfifo & 3385.87 & 694.78 & 92.94 & 1185167371 & 8141 & 872527 & 578556 & 106498 & 434756 & 1578.62 \\
+nice & 3715.43 & 1433.72 & 530.53 & 975510879 & 48540 & 605083 & 532306 & 107129 & 256117 & 1587.40 \\
+od & 4133.98 & 3633.46 & 3323.00 & 171369214 & 45334 & 143492 & 447495 & 117791 & 299160 & 1664.69 \\
+unexpand & 4193.22 & 4136.66 & 4100.41 & 17914203 & 17197 & 4656 & 28999 & 25142 & 0 & 725.56 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+\end{document}

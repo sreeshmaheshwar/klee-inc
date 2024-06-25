@@ -1,0 +1,10 @@
+Program,Mainline,Solver2-Global,Independent Pooling
+base64,94.44,93.11,88.90
+dircolors,99.19,99.21,99.24
+du,99.45,99.38,99.46
+fold,98.63,98.66,97.14
+ln,98.31,98.18,97.63
+mkfifo,25.34,20.52,20.64
+nice,38.57,38.59,40.44
+od,88.24,87.89,82.95
+unexpand,98.66,98.65,97.16
