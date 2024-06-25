@@ -32,7 +32,9 @@ Here we find all other strategies (that were used in the report for DFS). Some m
 
 ## Evaluation/Experiment Code
 
-We provide in this repository an `experiment` directory that contains an example of how we ran the final experiment mentioned in the report. Note that we use VMs to run a single program over one VM - this can be modified to run all programs if a single machine is used. The experiment can be run with `python3 main.py`, and graphs and statistics can be automatically produced with `process.py` afterwards. Whichever combination of strategies can be tested against each other by changing the branch names so long as they are compatible (hence we provide just one such experiment). We also provide flexible infrastructure for enabling and disabling command line arguments.
+We provide in this repository an `experiment` directory that contains an example of how we ran an example *preliminary experiment* (that is, using our eight benchmarks and ~10 minutes baselines). The exact experiment is not one eventually included but should showcase the generalisable methodology we used.
+
+Note that we use VMs to run a single program over one VM - this can be modified to run all programs if a single machine is used. The experiment can be run with `python3 main.py`, and graphs and statistics can be automatically produced with `process.py` afterwards. Whichever combination of strategies can be tested against each other by changing the branch names so long as they are compatible (hence we provide just one such experiment). We also provide flexible infrastructure for enabling and disabling command line arguments.
 
 **Before** testing, run the script `bash setup.sh` to configure your machhine deterministically (though do inspect this first). It also requires the instructions (mentioned below to ahve been carried out).
 
