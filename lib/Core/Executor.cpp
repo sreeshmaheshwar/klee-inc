@@ -3599,7 +3599,6 @@ void Executor::bindModuleConstants() {
 
 void Executor::killStatesDueToCap(unsigned long toKill) {
   if (stos) {
-    // *stos << stats::instructions << " " << toKill << "\n";
     Statistic *S = theStatisticManager->getStatisticByName("Instructions");
     std::uint64_t instructions = S ? S->getValue() : 0;
     stos->write(instructions);
@@ -3639,9 +3638,7 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
     }
   }
   if (stos) {
-    stos->write(-1);
-    // *stos << -1 << " "; // Signify end of state printing.
-    // stos->flush();
+    stos->write(-1); // Signify end of state printing.
   }
 }
 

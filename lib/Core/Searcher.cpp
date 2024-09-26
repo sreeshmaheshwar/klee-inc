@@ -587,13 +587,6 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
   }
   std::string error;
   fileName.append(".gz");
-
-  // auto f = std::make_unique<compressed_fd_istream>(fileName, error);
-  // for (int i = 0; i < 1000; ++i) {
-  //   klee_warning("%d", f->nextInt().value());
-  // }
-  // klee_error("Done!");
-
   sos = klee_open_buffered_typed_output_file(fileName, error);
   if (!sos) {
     klee_error("Could not open file for outputting searcher %s : %s", fileName.c_str(), error.c_str());
@@ -602,10 +595,7 @@ OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName
 
 ExecutionState &OutputtingSearcher::selectState() {
   ExecutionState& res = searcher->selectState();
-  // klee_warning("Writing state %d", res.id);
   sos->write(res.id);
-  // sos->stream->write(reinterpret_cast<const char *>(&res.id), sizeof(res.id));
-  // sos->stream->flush();
   return res;
 }
 
