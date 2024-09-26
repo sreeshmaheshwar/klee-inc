@@ -644,11 +644,6 @@ ExecutionState &InputtingSearcher::selectState() {
   if (!optionalId) {
     klee_error("No more states to read from inputting searcher");
   }
-  // auto id = optionalId.value();
-  // if (!byId.count(id)) {
-  //   klee_error("Inputted state not present for selectState()");
-  // }
-  // return *byId[id];
   auto it = byId.find(optionalId.value());
   if (it == byId.end()) {
     klee_error("Inputted state not present for selectState()");

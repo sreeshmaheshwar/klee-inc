@@ -3632,11 +3632,9 @@ void Executor::killStatesDueToCap(unsigned long toKill) {
 
       std::swap(arr[idx], arr[N - 1]);
       std::swap(stateIndex[idx], stateIndex[N - 1]);
-      // klee_warning("term-bug state: %d", arr[N - 1]->id);
       terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
       if (stos) {
         stos->write(stateIndex[N - 1]);
-        // *stos << stateIndex[N - 1] << " ";
       }
     }
   }

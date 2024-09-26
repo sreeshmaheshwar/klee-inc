@@ -10,20 +10,24 @@
 #ifndef KLEE_COMPRESSIONSTREAM_H
 #define KLEE_COMPRESSIONSTREAM_H
 
-#include "llvm/Support/raw_ostream.h"
+#include "klee/Support/ErrorHandling.h"
 #include "zlib.h"
-
+#include "llvm/Support/raw_ostream.h"
 #include <cassert>
+#include <cstring>
 #include <errno.h>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
-#include <optional>
+#include <zlib.h>
 
 namespace klee {
 const size_t BUFSIZE = 128 * 1024;
@@ -54,60 +58,106 @@ public:
   ~compressed_fd_ostream();
 };
 
-// class compressed_fd_istream {
-//   int FD;
-//   std::vector<uint8_t> buffer;
-//   z_stream strm;
-//   std::ifstream fileStream;
-//   bool eofReached;
-
-// public:
-//   compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
-//   ~compressed_fd_istream();
-
-//   std::optional<int> nextInt();
-//   bool eof() const { return eofReached && strm.avail_in == 0 && strm.avail_out == BUFSIZE; }
-
-// private:
-//   void fillBuffer();
-//   bool decompressToBuffer(size_t Size);
-// };
+constexpr size_t COMPRESSED_BUFSIZE = 16384;
+constexpr size_t DECOMPRESSED_BUFSIZE = 16384;
 
 class compressed_fd_istream {
-  std::ifstream fileStream;
-  std::vector<uint8_t> inputBuffer;
-  std::vector<uint8_t> outputBuffer;
+  int FD;
+  uint8_t compressed_buffer[COMPRESSED_BUFSIZE];
+  uint8_t decompressed_buffer[DECOMPRESSED_BUFSIZE];
+  size_t decompressed_size;
+  size_t decompressed_pos;
   z_stream strm;
-  size_t outputBufferPos;
-  size_t outputBufferSize;
-  bool eofReached;
+  bool eof_reached;
 
-  void fillInputBuffer();
-  bool decompressToOutputBuffer(size_t size);
+  void init_zlib() {
+    std::memset(&strm, 0, sizeof(strm));
+    int ret = inflateInit2(&strm, 31);
+    if (ret != Z_OK) {
+      klee_error("inflateInit returned with error: %d", ret);
+    }
+  }
 
-public:
-  compressed_fd_istream(const std::string &Filename, std::string &ErrorInfo);
-  ~compressed_fd_istream();
+  void cleanup_zlib() { inflateEnd(&strm); }
 
-  template <typename T>
-  std::optional<T> next() {
-    size_t valueSize = sizeof(T);
-    if (outputBufferPos + valueSize > outputBufferSize) {
-      if (!decompressToOutputBuffer(BUFSIZE)) {
-        return std::nullopt;
+  void fill_decompressed_buffer() {
+    if (eof_reached) {
+      decompressed_size = 0;
+      return;
+    }
+
+    strm.avail_out = DECOMPRESSED_BUFSIZE;
+    strm.next_out = decompressed_buffer;
+
+    while (strm.avail_out > 0) {
+      if (strm.avail_in == 0) {
+        ssize_t bytes_read = read(FD, compressed_buffer, COMPRESSED_BUFSIZE);
+        if (bytes_read < 0) {
+          klee_error("Error reading from file");
+        } else if (bytes_read == 0) {
+          eof_reached = true;
+          break;
+        }
+        strm.avail_in = bytes_read;
+        strm.next_in = compressed_buffer;
+      }
+
+      int ret = inflate(&strm, Z_NO_FLUSH);
+      if (ret == Z_STREAM_END) {
+        eof_reached = true;
+        break;
+      }
+      if (ret != Z_OK) {
+        klee_error("inflate returned with error: %d", ret);
       }
     }
-    if (outputBufferPos + valueSize > outputBufferSize) {
-      return std::nullopt;
+
+    decompressed_size = DECOMPRESSED_BUFSIZE - strm.avail_out;
+    decompressed_pos = 0;
+  }
+
+public:
+  compressed_fd_istream(const std::string &Filename)
+      : decompressed_size(0), decompressed_pos(0), eof_reached(false) {
+    FD = open(Filename.c_str(), O_RDONLY);
+    if (FD < 0) {
+      klee_error("Failed to open file: %s", Filename.c_str());
     }
-    T value;
-    std::memcpy(&value, outputBuffer.data() + outputBufferPos, valueSize);
-    // Advance buffer ptr.
-    outputBufferPos += valueSize;
-    return value;
+    init_zlib();
+  }
+
+  ~compressed_fd_istream() {
+    cleanup_zlib();
+    if (FD >= 0) {
+      close(FD);
+    }
+  }
+
+  size_t read_bytes(char *buffer, size_t size) {
+    size_t bytes_read = 0;
+    while (bytes_read < size) {
+      if (decompressed_pos >= decompressed_size) {
+        fill_decompressed_buffer();
+        if (decompressed_size == 0) {
+          break;
+        }
+      }
+
+      size_t bytes_available = decompressed_size - decompressed_pos;
+      size_t bytes_to_copy = std::min(size - bytes_read, bytes_available);
+      std::memcpy(buffer + bytes_read, decompressed_buffer + decompressed_pos,
+                  bytes_to_copy);
+      decompressed_pos += bytes_to_copy;
+      bytes_read += bytes_to_copy;
+    }
+    return bytes_read;
+  }
+
+  bool eof() const {
+    return eof_reached && (decompressed_pos >= decompressed_size);
   }
 };
 
-}
+} // namespace klee
 
 #endif /* KLEE_COMPRESSIONSTREAM_H */
