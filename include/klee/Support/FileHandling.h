@@ -24,7 +24,6 @@ DISABLE_WARNING_POP
 #include <llvm/Support/MemoryBuffer.h>
 
 #include <optional>
-#include <type_traits>
 
 namespace klee {
 std::unique_ptr<llvm::MemoryBuffer>
@@ -37,6 +36,7 @@ klee_open_output_file(const std::string &path, std::string &error);
 std::unique_ptr<llvm::raw_ostream>
 klee_open_compressed_output_file(const std::string &path, std::string &error);
 
+// Provides templated write method, so we inline the implementation.
 class BufferedTypedOstream {
   std::unique_ptr<llvm::raw_ostream> stream;
 
@@ -49,6 +49,7 @@ public:
   }
 };
 
+// Provides templated read method, so we inline the implementation.
 class BufferedTypedIstream {
   std::unique_ptr<compressed_fd_istream> stream;
   char internal_buffer[DECOMPRESSED_BUFSIZE];
@@ -60,9 +61,6 @@ public:
       : stream(std::move(_stream)), buffer_size(0), buffer_pos(0) {}
 
   template <typename T> std::optional<T> next() {
-    static_assert(std::is_trivially_copyable<T>::value,
-                  "Type T must be trivially copyable");
-
     T value;
     size_t bytes_needed = sizeof(T);
     size_t bytes_read = 0;
