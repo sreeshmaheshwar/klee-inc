@@ -20,6 +20,20 @@
 
 namespace klee {
 
+std::unique_ptr<llvm::MemoryBuffer>
+klee_open_input_file(const std::string &path, std::string &error) {
+  error.clear();
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> bufferOrError =
+      llvm::MemoryBuffer::getFile(path, true);
+  
+  if (!bufferOrError) {
+    error = bufferOrError.getError().message();
+    return nullptr;
+  }
+  
+  return std::move(bufferOrError.get());
+}
+
 std::unique_ptr<llvm::raw_fd_ostream>
 klee_open_output_file(const std::string &path, std::string &error) {
   error.clear();
@@ -45,5 +59,18 @@ klee_open_compressed_output_file(const std::string &path, std::string &error) {
   }
   return f;
 }
+
+std::unique_ptr<BufferedTypedOstream>
+klee_open_buffered_typed_output_file(const std::string &path, std::string &error) {
+  return std::make_unique<BufferedTypedOstream>(klee_open_compressed_output_file(path, error));
+}
+
+std::unique_ptr<BufferedTypedIstream>
+klee_open_buffered_typed_input_file(const std::string &path,
+                                    std::string &error) {
+  return std::make_unique<BufferedTypedIstream>(
+      std::make_unique<compressed_fd_istream>(path));
+}
+
 #endif
 }

@@ -29,6 +29,8 @@
 #include "klee/Module/KModule.h"
 #include "klee/System/Time.h"
 
+#include "klee/Support/FileHandling.h"
+
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -167,6 +169,20 @@ private:
   /// Disables forking, instead a random path is chosen. Enabled as
   /// needed to control memory usage. \see fork()
   bool atMemoryLimit;
+
+  /// Used for deterministic replaying of state termination on memory
+  /// limit being reached. The number of states to terminate is
+  /// read from this stream. 
+  std::unique_ptr<BufferedTypedIstream> stis;
+  
+  /// Used for deterministic replaying of state termination on memory
+  /// limit being reached. The number of states to terminate is
+  /// outputted to this stream. 
+  std::unique_ptr<BufferedTypedOstream> stos; 
+
+  bool nextTerminationPresent = false;
+  std::uint64_t nextInstructionsToTerminate;
+  unsigned long nextNumberToTerminate;
 
   /// Disables forking, set by client. \see setInhibitForking()
   bool inhibitForking;
@@ -370,6 +386,9 @@ private:
                     unsigned index,
                     ExecutionState &state,
                     ref<Expr> value);
+
+  void advanceTerminationReplay();
+  void killStatesDueToCap(unsigned long toKill);
 
   /// Evaluates an LLVM constant expression.  The optional argument ki
   /// is the instruction where this constant was encountered, or NULL
