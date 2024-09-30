@@ -10,14 +10,11 @@
 #include "klee/Config/Version.h"
 #ifdef HAVE_ZLIB_H
 #include "klee/Support/CompressionStream.h"
+#include "klee/Support/ErrorHandling.h"
 
 #include "llvm/Support/FileSystem.h"
 
 #include <fcntl.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 namespace klee {
 
@@ -112,5 +109,92 @@ void compressed_fd_ostream::write_file(const char *Ptr, size_t Size) {
     Size -= ret;
   } while (Size > 0);
 }
+
+void compressed_fd_istream::init_zlib() {
+  std::memset(&strm, 0, sizeof(strm));
+  int ret = inflateInit2(&strm, 31);
+  if (ret != Z_OK) {
+    klee_error("inflateInit returned with error: %d", ret);
+  }
+}
+
+void compressed_fd_istream::cleanup_zlib() { inflateEnd(&strm); }
+
+void compressed_fd_istream::fill_decompressed_buffer() {
+  if (eof_reached) {
+    decompressed_size = 0;
+    return;
+  }
+
+  strm.avail_out = DECOMPRESSED_BUFSIZE;
+  strm.next_out = decompressed_buffer;
+
+  while (strm.avail_out > 0) {
+    if (strm.avail_in == 0) {
+      ssize_t bytes_read = read(FD, compressed_buffer, COMPRESSED_BUFSIZE);
+      if (bytes_read < 0) {
+        klee_error("Error reading from file");
+      } else if (bytes_read == 0) {
+        eof_reached = true;
+        break;
+      }
+      strm.avail_in = bytes_read;
+      strm.next_in = compressed_buffer;
+    }
+
+    int ret = inflate(&strm, Z_NO_FLUSH);
+    if (ret == Z_STREAM_END) {
+      eof_reached = true;
+      break;
+    }
+    if (ret != Z_OK) {
+      klee_error("inflate returned with error: %d", ret);
+    }
+  }
+
+  decompressed_size = DECOMPRESSED_BUFSIZE - strm.avail_out;
+  decompressed_pos = 0;
+}
+
+compressed_fd_istream::compressed_fd_istream(const std::string &Filename)
+    : decompressed_size(0), decompressed_pos(0), eof_reached(false) {
+  FD = open(Filename.c_str(), O_RDONLY);
+  if (FD < 0) {
+    klee_error("Failed to open file: %s", Filename.c_str());
+  }
+  init_zlib();
+}
+
+compressed_fd_istream::~compressed_fd_istream() {
+  cleanup_zlib();
+  if (FD >= 0) {
+    close(FD);
+  }
+}
+
+size_t compressed_fd_istream::read_bytes(char *buffer, size_t size) {
+  size_t bytes_read = 0;
+  while (bytes_read < size) {
+    if (decompressed_pos >= decompressed_size) {
+      fill_decompressed_buffer();
+      if (decompressed_size == 0) {
+        break;
+      }
+    }
+
+    size_t bytes_available = decompressed_size - decompressed_pos;
+    size_t bytes_to_copy = std::min(size - bytes_read, bytes_available);
+    std::memcpy(buffer + bytes_read, decompressed_buffer + decompressed_pos,
+                bytes_to_copy);
+    decompressed_pos += bytes_to_copy;
+    bytes_read += bytes_to_copy;
+  }
+  return bytes_read;
+}
+
+bool compressed_fd_istream::eof() const {
+  return eof_reached && (decompressed_pos >= decompressed_size);
+}
+
 }
 #endif

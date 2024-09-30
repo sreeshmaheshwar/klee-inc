@@ -47,7 +47,8 @@ cl::list<Searcher::CoreSearchType> CoreSearch(
                    "use NURS with Instr-Count"),
         clEnumValN(Searcher::NURS_CPICnt, "nurs:cpicnt",
                    "use NURS with CallPath-Instr-Count"),
-        clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost")),
+        clEnumValN(Searcher::NURS_QC, "nurs:qc", "use NURS with Query-Cost"),
+        clEnumValN(Searcher::Inputting, "inputting", "use searcher that reads states from file")),
     cl::cat(SearchCat));
 
 cl::opt<bool> UseIterativeDeepeningTimeSearch(
@@ -77,6 +78,19 @@ cl::opt<std::string> BatchTime(
     cl::desc("Amount of time to batch when using "
              "--use-batching-search.  Set to 0s to disable (default=5s)"),
     cl::init("5s"),
+    cl::cat(SearchCat));
+
+cl::opt<std::string> StateInputFile(
+    "state-input",
+    cl::desc("File to read search states from using "
+             "--search=inputting.  (default=\"\")"),
+    cl::init(""),
+    cl::cat(SearchCat));
+
+cl::opt<std::string> StateOutputFile(
+    "state-output",
+    cl::desc("File to output search states to for an outputting search. Disable with \"\". (default=\"\")"),
+    cl::init(""),
     cl::cat(SearchCat));
 
 void initializeSearchOptions() {
@@ -121,6 +135,7 @@ Searcher *getNewSearcher(Searcher::CoreSearchType type, RNG &rng,
     case Searcher::NURS_ICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::InstCount, rng); break;
     case Searcher::NURS_CPICnt: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::CPInstCount, rng); break;
     case Searcher::NURS_QC: searcher = new WeightedRandomSearcher(WeightedRandomSearcher::QueryCost, rng); break;
+    case Searcher::Inputting: searcher = new InputtingSearcher(StateInputFile); break;
   }
 
   return searcher;
@@ -155,6 +170,11 @@ Searcher *klee::constructUserSearcher(Executor &executor) {
     executor.setMergingSearcher(ms);
 
     searcher = ms;
+  }
+
+  // Outputting searcher surrounds ANY other one.
+  if (!StateOutputFile.empty()) {
+    searcher = new OutputtingSearcher(searcher, StateOutputFile);
   }
 
   llvm::raw_ostream &os = executor.getHandler().getInfoStream();
