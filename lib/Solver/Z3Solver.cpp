@@ -313,24 +313,27 @@ void Z3SolverImpl::assertConstantArrays(const ref<Expr> &e) {
 
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
-    std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
+    std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
   QueryWriter writer(query);
   auto stack_it = assertionStack.begin();
 
-  // (Hashed) LCP between the assertion stack and the query.
-  while (stack_it != assertionStack.end() && !writer.done() && (*stack_it)->hash() == writer.next()->hash()) {
+  // LCP between the assertion stack (i.e. previous query) and query.
+  while (stack_it != assertionStack.end() && !writer.done() &&
+         (*stack_it)->hash() == writer.next()->hash()) {
     ++stack_it;
     writer.advance();
   }
 
+  // Pop off all constraints not in LCP.
   popFrames(std::distance(stack_it, assertionStack.end()));
 
+  // Push the remaining constraints of the current query.
   while (!writer.done()) {
     Z3_solver_push(builder->ctx, z3Solver);
-    auto e = writer.next();
+    const auto &e = writer.next();
     assertionStack.push_back(e);
     Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
     assertConstantArrays(e);
