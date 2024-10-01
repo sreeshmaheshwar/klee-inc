@@ -67,6 +67,10 @@ class Z3SolverImpl : public SolverImpl {
 private:
   Z3_solver z3Solver;
   ConstraintSet::constraints_ty assertionStack;
+  // Constant arrays whose assertions have been relayed on assertion stack:
+  std::unordered_set<const Array *> carraysInStack;
+  // Constant arrays whose assertions have been relayed in each frame:
+  std::vector<std::vector<const Array *>> carraysInFrame;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
@@ -299,15 +303,23 @@ bool Z3SolverImpl::internalRunSolver(
   };
 
   // LCP between the assertion stack and the query constraints.
-  // We use hash-consed comparisons for efficiency.
+  // We use hashed comparisons (expressions are hash-cons-ed).
   while (stack_it != assertionStack.end() && !all_written() && (*stack_it)->hash() == get_expr_to_write()->hash()) {
     ++stack_it;
     advance_expr_to_write();
   }
 
-  // Pop off extra constraints from stack.
-  Z3_solver_pop(builder->ctx, z3Solver, std::distance(stack_it, assertionStack.end()));
-  assertionStack.erase(stack_it, assertionStack.end());
+  { // Pop off extra constraints from stack.
+    size_t to_pop = std::distance(stack_it, assertionStack.end());
+    Z3_solver_pop(builder->ctx, z3Solver, to_pop);
+    while (to_pop--) {
+      for (const auto& array : carraysInFrame.back()) {
+        carraysInStack.erase(array);
+      }
+      carraysInFrame.pop_back();
+      assertionStack.pop_back();
+    }
+  }
 
   // Add the remaining query constraints.
   while (!all_written()) {
@@ -316,16 +328,36 @@ bool Z3SolverImpl::internalRunSolver(
     assertionStack.push_back(e);
     Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
 
+    // Note that constant arrays are delicate. We do not want to assert
+    // all (potentially large and duplicated) constant arrays for every
+    // expression separately, but we can't leave this as it was before
+    // and assert all constant arrays in the current constraints left to
+    // be written at the end as this is an error - we may potentially
+    // pop off the some of the stack next and lose relevant assertions.
+    // Instead, we visit each expression to be asserted individually, and
+    // carefully maintain data structures corresponding to current constant
+    // arrays that have been relayed to prevent asserting them again, and
+    // assert them only on the specific frame that first introduced them.
+    // This also ensures Z3 is supplied only with the necessary assertions
+    // and that we benefit from incrementality over the constant arrays.
+    // Note that an assertion frame may contain multiple assertions (the
+    // actual expression and any unseen constant array assertions) which
+    // differs from the LCP approach presented in the related work.
+
     ConstantArrayFinder constant_arrays_in_query;
     constant_arrays_in_query.visit(e);
 
-    // Add constant array assertions.
+    // Add constant array assertions not present in stack at this frame.
     for (auto const &constant_array : constant_arrays_in_query.results) {
       assert(builder->constant_array_assertions.count(constant_array) == 1 &&
               "Constant array found in query, but not handled by Z3Builder");
-      for (auto const &arrayIndexValueExpr :
-            builder->constant_array_assertions[constant_array]) {
-        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+      if (carraysInStack.count(constant_array) == 0) {
+        carraysInStack.insert(constant_array);
+        carraysInFrame.back().push_back(constant_array);
+        for (auto const &arrayIndexValueExpr :
+             builder->constant_array_assertions[constant_array]) {
+          Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+        }
       }
     }
 
