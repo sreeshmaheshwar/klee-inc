@@ -11,6 +11,7 @@
 #define KLEE_SOLVER_H
 
 #include "klee/Expr/Expr.h"
+#include "klee/Expr/Constraints.h"
 #include "klee/System/Time.h"
 #include "klee/Solver/SolverCmdLine.h"
 
@@ -57,6 +58,33 @@ namespace klee {
 
     /// Dump query
     void dump() const ;
+  };
+
+  class QueryWriter {
+  public:
+    QueryWriter(const Query &query)
+        : queryIt(query.constraints.begin()), queryEnd(query.constraints.end()),
+          negatedExp(Expr::createIsZero(query.expr)), exprDone(false) {}
+
+    bool done() const { return queryIt == queryEnd && exprDone; }
+
+    const ref<Expr>& next() const {
+      return (queryIt == queryEnd) ? negatedExp : *queryIt;
+    }
+
+    void advance() {
+      if (queryIt != queryEnd) {
+        ++queryIt;
+      } else {
+        exprDone = true;
+      }
+    }
+
+  private:
+    ConstraintSet::constraints_ty::const_iterator queryIt;
+    ConstraintSet::constraints_ty::const_iterator queryEnd;
+    ref<Expr> negatedExp;
+    bool exprDone;
   };
 
   class Solver {

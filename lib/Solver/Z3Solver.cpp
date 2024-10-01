@@ -86,6 +86,9 @@ private:
                          bool &hasSolution);
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
 
+  void popFrames(size_t frames);
+  void assertConstantArrays(const ref<Expr> &e);
+
 public:
   Z3SolverImpl();
   ~Z3SolverImpl();
@@ -263,105 +266,75 @@ bool Z3SolverImpl::computeInitialValues(
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
+void Z3SolverImpl::popFrames(size_t frames) {
+  Z3_solver_pop(builder->ctx, z3Solver, frames);
+  while (frames--) {
+    for (const auto &array : carraysInFrame.back()) {
+      carraysInStack.erase(array);
+    }
+    carraysInFrame.pop_back();
+    assertionStack.pop_back();
+  }
+}
+
+void Z3SolverImpl::assertConstantArrays(const ref<Expr> &e) {
+  // Note that constant arrays are delicate. We do not want to assert
+  // all (potentially large and duplicated) constant arrays for every
+  // expression separately, but we can't leave this as it was before
+  // and assert all constant arrays in the current constraints left to
+  // be written at the end as this is an error - we may potentially
+  // pop off the some of the stack next and lose relevant assertions.
+  // Instead, we visit each expression to be asserted individually, and
+  // carefully maintain data structures corresponding to current constant
+  // arrays that have been relayed to prevent asserting them again, and
+  // assert them only on the specific frame that first introduced them.
+  // This also ensures Z3 is supplied only with the necessary assertions
+  // and that we benefit from incrementality over the constant arrays.
+  // Note that an assertion frame may contain multiple assertions (the
+  // actual expression and any unseen constant array assertions) which
+  // differs from the LCP approach presented in the related work.
+  ConstantArrayFinder constant_arrays_in_query;
+  constant_arrays_in_query.visit(e);
+
+  // Add constant array assertions not present in stack at this frame.
+  for (auto const &constant_array : constant_arrays_in_query.results) {
+    assert(builder->constant_array_assertions.count(constant_array) == 1 &&
+           "Constant array found in query, but not handled by Z3Builder");
+    if (carraysInStack.count(constant_array) == 0) {
+      carraysInStack.insert(constant_array);
+      carraysInFrame.back().push_back(constant_array);
+      for (auto const &arrayIndexValueExpr :
+           builder->constant_array_assertions[constant_array]) {
+        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+      }
+    }
+  }
+}
+
 bool Z3SolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
 
+  QueryWriter writer(query);
   auto stack_it = assertionStack.begin();
-  auto query_it = query.constraints.begin();
 
-  // KLEE Queries are validity queries i.e.
-  // ∀ X Constraints(X) → query(X)
-  // but Z3 works in terms of satisfiability so instead we ask the
-  // negation of the equivalent i.e.
-  // ∃ X Constraints(X) ∧ ¬ query(X)
-  auto negated_exp = Expr::createIsZero(query.expr);
-  bool expr_done = false;
-
-  // We wish to persist the negation of the query expression to the
-  // assertion stack to benefit from incrementality over it.
-  // We can't modify the query constraints (by pushing the negated
-  // expression to it) and don't want to create a copy of them. So
-  // we take the approach of manually advancing custom iterators.
-  const auto all_written = [&]() {
-    return query_it == query.constraints.end() && expr_done;
-  };
-  const auto get_expr_to_write = [&]() {
-    if (query_it == query.constraints.end()) {
-      return negated_exp;
-    }
-    return *query_it;
-  };
-  const auto advance_expr_to_write = [&]() {
-    if (query_it != query.constraints.end()) {
-      ++query_it;
-    } else {
-      expr_done = true;
-    }
-  };
-
-  // LCP between the assertion stack and the query constraints.
-  // We use hashed comparisons (expressions are hash-cons-ed).
-  while (stack_it != assertionStack.end() && !all_written() && (*stack_it)->hash() == get_expr_to_write()->hash()) {
+  // (Hashed) LCP between the assertion stack and the query.
+  while (stack_it != assertionStack.end() && !writer.done() && (*stack_it)->hash() == writer.next()->hash()) {
     ++stack_it;
-    advance_expr_to_write();
+    writer.advance();
   }
 
-  { // Pop off extra constraints from stack.
-    size_t to_pop = std::distance(stack_it, assertionStack.end());
-    Z3_solver_pop(builder->ctx, z3Solver, to_pop);
-    while (to_pop--) {
-      for (const auto& array : carraysInFrame.back()) {
-        carraysInStack.erase(array);
-      }
-      carraysInFrame.pop_back();
-      assertionStack.pop_back();
-    }
-  }
+  popFrames(std::distance(stack_it, assertionStack.end()));
 
-  // Add the remaining query constraints.
-  while (!all_written()) {
+  while (!writer.done()) {
     Z3_solver_push(builder->ctx, z3Solver);
-    auto e = get_expr_to_write();
+    auto e = writer.next();
     assertionStack.push_back(e);
     Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
-
-    // Note that constant arrays are delicate. We do not want to assert
-    // all (potentially large and duplicated) constant arrays for every
-    // expression separately, but we can't leave this as it was before
-    // and assert all constant arrays in the current constraints left to
-    // be written at the end as this is an error - we may potentially
-    // pop off the some of the stack next and lose relevant assertions.
-    // Instead, we visit each expression to be asserted individually, and
-    // carefully maintain data structures corresponding to current constant
-    // arrays that have been relayed to prevent asserting them again, and
-    // assert them only on the specific frame that first introduced them.
-    // This also ensures Z3 is supplied only with the necessary assertions
-    // and that we benefit from incrementality over the constant arrays.
-    // Note that an assertion frame may contain multiple assertions (the
-    // actual expression and any unseen constant array assertions) which
-    // differs from the LCP approach presented in the related work.
-
-    ConstantArrayFinder constant_arrays_in_query;
-    constant_arrays_in_query.visit(e);
-
-    // Add constant array assertions not present in stack at this frame.
-    for (auto const &constant_array : constant_arrays_in_query.results) {
-      assert(builder->constant_array_assertions.count(constant_array) == 1 &&
-              "Constant array found in query, but not handled by Z3Builder");
-      if (carraysInStack.count(constant_array) == 0) {
-        carraysInStack.insert(constant_array);
-        carraysInFrame.back().push_back(constant_array);
-        for (auto const &arrayIndexValueExpr :
-             builder->constant_array_assertions[constant_array]) {
-          Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
-        }
-      }
-    }
-
-    advance_expr_to_write();
+    assertConstantArrays(e);
+    writer.advance();
   }
 
   ++stats::solverQueries;
