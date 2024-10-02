@@ -299,8 +299,7 @@ bool Z3SolverImpl::internalRunSolver(
   };
 
   // LCP between the assertion stack and the query constraints.
-  // We use hash-consed comparisons for efficiency.
-  while (stack_it != assertionStack.end() && !all_written() && (*stack_it)->hash() == get_expr_to_write()->hash()) {
+  while (stack_it != assertionStack.end() && !all_written() && !(*stack_it)->compare(*get_expr_to_write())) {
     ++stack_it;
     advance_expr_to_write();
   }
