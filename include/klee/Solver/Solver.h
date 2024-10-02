@@ -36,19 +36,26 @@ namespace klee {
   public:
     const ConstraintSet &constraints;
     ref<Expr> expr;
+    const ConstraintSet &constraintsToWrite;
 
-    Query(const ConstraintSet& _constraints, ref<Expr> _expr)
-      : constraints(_constraints), expr(_expr) {
-    }
+    Query(const ConstraintSet &_constraints, ref<Expr> _expr)
+        : constraints(_constraints), expr(_expr),
+          constraintsToWrite(_constraints) {}
+
+    Query(const ConstraintSet &_constraints, ref<Expr> _expr,
+          const ConstraintSet &_constraintsToWrite)
+        : constraints(_constraints), expr(_expr),
+          constraintsToWrite(_constraintsToWrite) {}
 
     /// withExpr - Return a copy of the query with the given expression.
     Query withExpr(ref<Expr> _expr) const {
-      return Query(constraints, _expr);
+      return Query(constraints, _expr, constraintsToWrite);
     }
 
     /// withFalse - Return a copy of the query with a false expression.
     Query withFalse() const {
-      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool));
+      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool),
+                   constraintsToWrite);
     }
 
     /// negateExpr - Return a copy of the query with the expression negated.
@@ -63,7 +70,8 @@ namespace klee {
   class QueryWriter {
   public:
     QueryWriter(const Query &query)
-        : queryIt(query.constraints.begin()), queryEnd(query.constraints.end()),
+        : queryIt(query.constraintsToWrite.begin()),
+          queryEnd(query.constraintsToWrite.end()),
           negatedExp(Expr::createIsZero(query.expr)), exprDone(false) {}
 
     bool done() const { return queryIt == queryEnd && exprDone; }
