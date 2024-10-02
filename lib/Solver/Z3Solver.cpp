@@ -29,6 +29,8 @@
 
 #include <iterator> // std::distance
 #include <memory>
+#include <unordered_set>
+#include <vector>
 
 namespace {
 // NOTE: Very useful for debugging Z3 behaviour. These files can be given to
