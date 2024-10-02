@@ -27,7 +27,10 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <iterator> // std::distance
 #include <memory>
+#include <unordered_set>
+#include <vector>
 
 namespace {
 // NOTE: Very useful for debugging Z3 behaviour. These files can be given to
@@ -65,6 +68,11 @@ namespace klee {
 class Z3SolverImpl : public SolverImpl {
 private:
   Z3_solver z3Solver;
+  ConstraintSet::constraints_ty assertionStack;
+  // Constant arrays whose assertions have been relayed on assertion stack:
+  std::unordered_set<const Array *> carraysInStack;
+  // Constant arrays whose assertions have been relayed in each frame:
+  std::vector<std::vector<const Array *>> carraysInFrame;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
@@ -79,6 +87,9 @@ private:
                          std::vector<std::vector<unsigned char> > *values,
                          bool &hasSolution);
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
+
+  void popFrames(size_t frames);
+  void pushConstraint(const ref<Expr> &e);
 
 public:
   Z3SolverImpl();
@@ -257,44 +268,83 @@ bool Z3SolverImpl::computeInitialValues(
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
-bool Z3SolverImpl::internalRunSolver(
-    const Query &query, const std::vector<const Array *> *objects,
-    std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
-  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
-  TimerStatIncrementer t(stats::queryTime);
-
-  Z3_solver_push(builder->ctx, z3Solver); 
-
-  ConstantArrayFinder constant_arrays_in_query;
-  for (auto const &constraint : query.constraints) {
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(constraint));
-    constant_arrays_in_query.visit(constraint);
+void Z3SolverImpl::popFrames(size_t frames) {
+  Z3_solver_pop(builder->ctx, z3Solver, frames);
+  while (frames--) {
+    for (const auto &array : carraysInFrame.back()) {
+      carraysInStack.erase(array);
+    }
+    carraysInFrame.pop_back();
+    assertionStack.pop_back();
   }
-  ++stats::solverQueries;
-  if (objects)
-    ++stats::queryCounterexamples;
+}
 
-  Z3ASTHandle z3QueryExpr =
-      Z3ASTHandle(builder->construct(query.expr), builder->ctx);
-  constant_arrays_in_query.visit(query.expr);
+void Z3SolverImpl::pushConstraint(const ref<Expr> &e) {
+  Z3_solver_push(builder->ctx, z3Solver);
+  assertionStack.push_back(e);
+  carraysInFrame.emplace_back();
+  Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
 
+  // Note that constant arrays are delicate. We do not want to assert
+  // all (potentially large and duplicated) constant arrays for every
+  // expression separately, but we can't leave this as it was before
+  // and assert all constant arrays in the current constraints left to
+  // be written at the end as this is an error - we may potentially
+  // pop off the some of the stack next and lose relevant assertions.
+  // Instead, we visit each expression to be asserted individually, and
+  // carefully maintain data structures corresponding to current constant
+  // arrays that have been relayed to prevent asserting them again, and
+  // assert them only on the specific frame that first introduced them.
+  // This also ensures Z3 is supplied only with the necessary assertions
+  // and that we benefit from incrementality over the constant arrays.
+  // Note that an assertion frame may contain multiple assertions (the
+  // actual expression and any unseen constant array assertions) which
+  // differs from the LCP approach presented in the related work.
+  ConstantArrayFinder constant_arrays_in_query;
+  constant_arrays_in_query.visit(e);
+
+  // Add constant array assertions not present in stack at this frame.
   for (auto const &constant_array : constant_arrays_in_query.results) {
     assert(builder->constant_array_assertions.count(constant_array) == 1 &&
            "Constant array found in query, but not handled by Z3Builder");
-    for (auto const &arrayIndexValueExpr :
-         builder->constant_array_assertions[constant_array]) {
-      Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+    if (carraysInStack.count(constant_array) == 0) {
+      carraysInStack.insert(constant_array);
+      carraysInFrame.back().push_back(constant_array);
+      for (auto const &arrayIndexValueExpr :
+           builder->constant_array_assertions[constant_array]) {
+        Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+      }
     }
   }
+}
 
-  // KLEE Queries are validity queries i.e.
-  // ∀ X Constraints(X) → query(X)
-  // but Z3 works in terms of satisfiability so instead we ask the
-  // negation of the equivalent i.e.
-  // ∃ X Constraints(X) ∧ ¬ query(X)
-  Z3_solver_assert(
-      builder->ctx, z3Solver,
-      Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx));
+bool Z3SolverImpl::internalRunSolver(
+    const Query &query, const std::vector<const Array *> *objects,
+    std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
+  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
+  TimerStatIncrementer t(stats::queryTime);
+
+  QueryWriter writer(query);
+  auto stack_it = assertionStack.begin();
+
+  // LCP between the assertion stack (i.e. previous query) and query.
+  while (stack_it != assertionStack.end() && !writer.done() &&
+         (*stack_it)->hash() == writer.next()->hash()) {
+    ++stack_it;
+    writer.advance();
+  }
+
+  // Pop off all constraints not in LCP.
+  popFrames(std::distance(stack_it, assertionStack.end()));
+
+  // Push the remaining constraints of the current query.
+  for (; !writer.done(); writer.advance()) {
+    pushConstraint(writer.next());
+  }
+
+  ++stats::solverQueries;
+  if (objects)
+    ++stats::queryCounterexamples;
 
   if (dumpedQueriesFile) {
     *dumpedQueriesFile << "; start Z3 query\n";
@@ -315,9 +365,6 @@ bool Z3SolverImpl::internalRunSolver(
   // ``Query`` rather than only sharing within a single call to
   // ``builder->construct()``.
   builder->clearConstructCache();
-
-  Z3_solver_pop(builder->ctx, z3Solver, 1);
-
   if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
       runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
     if (hasSolution) {
