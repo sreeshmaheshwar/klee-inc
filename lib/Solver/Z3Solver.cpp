@@ -280,6 +280,7 @@ void Z3SolverImpl::popFrames(size_t frames) {
 void Z3SolverImpl::pushConstraint(const ref<Expr> &e) {
   Z3_solver_push(builder->ctx, z3Solver);
   assertionStack.push_back(e);
+  carraysInFrame.emplace_back();
   Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
 
   // Note that constant arrays are delicate. We do not want to assert
