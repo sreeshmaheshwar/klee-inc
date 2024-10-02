@@ -419,6 +419,21 @@ cl::opt<std::string> TimerInterval(
     cl::init("1s"),
     cl::cat(TerminationCat));
 
+/*** Termination Replaying Options ***/
+
+cl::opt<std::string> TermReplayInputFile(
+    "tr-input",
+    cl::desc("File to read state termiantion replay from. Disable with \"\""
+             "(default=\"\")"),
+    cl::init(""),
+    cl::cat(SearchCat));
+
+cl::opt<std::string> TermReplayOutputFile(
+    "tr-output",
+    cl::desc("File to write state termiantion replay to. Disable with \"\""
+             "(default=\"\")"),
+    cl::init(""),
+    cl::cat(SearchCat));
 
 /*** Debugging options ***/
 
@@ -513,6 +528,25 @@ Executor::Executor(LLVMContext &ctx, const InterpreterOptions &opts,
   memory = std::make_unique<MemoryManager>(&arrayCache);
 
   initializeSearchOptions();
+
+  if (!TermReplayInputFile.empty()) {
+    std::string error;
+    stis = std::move(klee_open_buffered_typed_input_file(TermReplayInputFile, error));
+    if (!stis) {
+      klee_error("Could not open file for inputting search %s : %s", TermReplayInputFile.c_str(), error.c_str());
+    }
+    advanceTerminationReplay();
+  }
+
+  if (!TermReplayOutputFile.empty()) {
+    std::string error;
+    std::string path = TermReplayOutputFile;
+    path.append(".gz");
+    stos = klee_open_buffered_typed_output_file(path, error);
+    if (!stos) {
+      klee_error("Could not open file for outputting searcher %s : %s", path.c_str(), error.c_str());
+    }
+  }
 
   if (OnlyOutputStatesCoveringNew && !StatsTracker::useIStats())
     klee_error("To use --only-output-states-covering-new, you need to enable --output-istats.");
@@ -1291,6 +1325,21 @@ void Executor::bindLocal(KInstruction *target, ExecutionState &state,
 void Executor::bindArgument(KFunction *kf, unsigned index, 
                             ExecutionState &state, ref<Expr> value) {
   getArgumentCell(state, kf, index).value = value;
+}
+
+void Executor::advanceTerminationReplay() {
+  assert(stis && "State termination input stream should be present to be advanced.");
+
+  auto nextInstructionsToTerminateOpt = stis->next<std::uint64_t>();
+  auto nextNumberToTerminateOpt = stis->next<unsigned long>();
+
+  if (!nextInstructionsToTerminateOpt || !nextNumberToTerminateOpt) {
+    nextTerminationPresent = false;
+  } else {
+    nextInstructionsToTerminate = nextInstructionsToTerminateOpt.value();
+    nextNumberToTerminate = nextNumberToTerminateOpt.value();
+    nextTerminationPresent = true;
+  }
 }
 
 ref<Expr> Executor::toUnique(const ExecutionState &state, 
@@ -3548,6 +3597,51 @@ void Executor::bindModuleConstants() {
   }
 }
 
+void Executor::killStatesDueToCap(unsigned long toKill) {
+  if (stos) {
+    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
+    std::uint64_t instructions = S ? S->getValue() : 0;
+    stos->write(instructions);
+    stos->write(toKill);
+    klee_warning("term-bug at: %lu", instructions);
+  }
+
+  // randomly select states for early termination
+  std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
+
+  if (stis) {
+    while (auto termIndex = stis->next<int>()) {
+      if (*termIndex == -1) {
+        break;
+      }
+      if (stos) {
+        stos->write(*termIndex);
+      }
+      terminateStateEarly(*arr[*termIndex], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+    }
+  } else {
+    std::vector<int> stateIndex(arr.size());
+    std::iota(stateIndex.begin(), stateIndex.end(), 0);
+    for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
+      unsigned idx = theRNG.getInt32() % N;
+      // Make two pulls to try and not hit a state that
+      // covered new code.
+      if (arr[idx]->coveredNew)
+        idx = theRNG.getInt32() % N;
+
+      std::swap(arr[idx], arr[N - 1]);
+      std::swap(stateIndex[idx], stateIndex[N - 1]);
+      terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
+      if (stos) {
+        stos->write(stateIndex[N - 1]);
+      }
+    }
+  }
+  if (stos) {
+    stos->write(-1); // Signify end of state printing.
+  }
+}
+
 bool Executor::checkMemoryUsage() {
   if (!MaxMemory) return true;
 
@@ -3556,6 +3650,19 @@ bool Executor::checkMemoryUsage() {
   // to pummel the freelist once we hit the memory cap.
   if ((stats::instructions & 0xFFFFU) != 0) // every 65536 instructions
     return true;
+
+  if (stis) {
+    if (nextTerminationPresent && stats::instructions == nextInstructionsToTerminate) {
+      klee_warning("killing %lu states in replay mode", nextNumberToTerminate);
+      killStatesDueToCap(nextNumberToTerminate);
+      advanceTerminationReplay();
+      return false;
+    }
+    // NOTE: Otherwise, we do not enforce Max Memory. This is because
+    // we are confident in our implementations - if merged, we should
+    // probably keep the Max Memory check to be safe and generalisable.
+    return true;
+  }
 
   // check memory limit
   const auto mallocUsage = util::GetTotalMallocUsage() >> 20U;
@@ -3572,21 +3679,9 @@ bool Executor::checkMemoryUsage() {
   // just guess at how many to kill
   const auto numStates = states.size();
   auto toKill = std::max(1UL, numStates - numStates * MaxMemory / totalUsage);
+
   klee_warning("killing %lu states (over memory cap: %luMB)", toKill, totalUsage);
-
-  // randomly select states for early termination
-  std::vector<ExecutionState *> arr(states.begin(), states.end()); // FIXME: expensive
-  for (unsigned i = 0, N = arr.size(); N && i < toKill; ++i, --N) {
-    unsigned idx = theRNG.getInt32() % N;
-    // Make two pulls to try and not hit a state that
-    // covered new code.
-    if (arr[idx]->coveredNew)
-      idx = theRNG.getInt32() % N;
-
-    std::swap(arr[idx], arr[N - 1]);
-    terminateStateEarly(*arr[N - 1], "Memory limit exceeded.", StateTerminationType::OutOfMemory);
-  }
-
+  killStatesDueToCap(toKill);
   return false;
 }
 

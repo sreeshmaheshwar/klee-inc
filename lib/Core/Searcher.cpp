@@ -23,6 +23,7 @@
 #include "klee/Module/KInstruction.h"
 #include "klee/Module/KModule.h"
 #include "klee/Support/ErrorHandling.h"
+#include "klee/Support/CompressionStream.h"
 #include "klee/System/Time.h"
 
 #include "klee/Support/CompilerWarning.h"
@@ -575,4 +576,96 @@ void InterleavedSearcher::printName(llvm::raw_ostream &os) {
   for (const auto &searcher : searchers)
     searcher->printName(os);
   os << "</InterleavedSearcher>\n";
+}
+
+OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::unique_ptr<BufferedTypedOstream> _sos) :
+  searcher(_searcher), sos(std::move(_sos)) {}
+
+OutputtingSearcher::OutputtingSearcher(Searcher* _searcher, std::string fileName) : searcher(_searcher) {
+  if (fileName.empty()) {
+    klee_error("No output file specified but outputting searcher used");
+  }
+  std::string error;
+  fileName.append(".gz");
+  sos = klee_open_buffered_typed_output_file(fileName, error);
+  if (!sos) {
+    klee_error("Could not open file for outputting searcher %s : %s", fileName.c_str(), error.c_str());
+  }
+}
+
+ExecutionState &OutputtingSearcher::selectState() {
+  ExecutionState& res = searcher->selectState();
+  sos->write(res.id);
+  return res;
+}
+
+void OutputtingSearcher::update(ExecutionState *current,
+                                const std::vector<ExecutionState *> &addedStates,
+                                const std::vector<ExecutionState *> &removedStates) {
+  searcher->update(current, addedStates, removedStates);
+}
+
+bool OutputtingSearcher::empty() {
+  return searcher->empty();
+}
+
+void OutputtingSearcher::printName(llvm::raw_ostream &os) {
+  os << "<OutputtingSearcher> containing:\n";
+  searcher->printName(os);
+  os << "</OutputtingSearcher>\n";
+}
+
+InputtingSearcher::InputtingSearcher(std::unique_ptr<BufferedTypedIstream> _sis)
+  : sis(std::move(_sis)) {}
+
+InputtingSearcher::InputtingSearcher(std::string fileName) {
+  if (fileName.empty()) {
+    klee_error("No input file specified but inputting search used");
+  }
+  std::string error;
+  sis = std::move(klee_open_buffered_typed_input_file(fileName, error));
+  if (!sis) {
+    klee_error("Could not open file for inputting search %s : %s", fileName.c_str(), error.c_str());
+  }
+}
+
+ExecutionState &InputtingSearcher::selectState() {
+  auto optionalId = sis->next<std::uint32_t>();
+  if (!optionalId) {
+    klee_error("No more states to read from inputting searcher");
+  }
+  auto it = byId.find(optionalId.value());
+  if (it == byId.end()) {
+    klee_error("Inputted state not present for selectState()");
+  }
+  return *it->second;
+}
+
+void InputtingSearcher::update(ExecutionState *current,
+                               const std::vector<ExecutionState *> &addedStates,
+                               const std::vector<ExecutionState *> &removedStates) {
+  // Insertion.
+  for (const auto state : addedStates) {
+    if (byId.count(state->id)) {
+      klee_error("Duplicate state present.");
+    }
+    byId[state->id] = state;
+  }
+
+  // Removal.
+  for (const auto state : removedStates) {
+    auto it = byId.find(state->id);
+    if (it == byId.end() || it->second != state) {
+      klee_error("Invalid state removed.");
+    }
+    byId.erase(it);
+  }
+}
+
+bool InputtingSearcher::empty() {
+  return byId.empty();
+}
+
+void InputtingSearcher::printName(llvm::raw_ostream &os) {
+  os << "InputtingSearcher\n";
 }

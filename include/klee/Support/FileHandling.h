@@ -19,13 +19,98 @@ DISABLE_WARNING_POP
 #include <memory>
 #include <string>
 
+#include "klee/Support/CompressionStream.h"
+#include "klee/Support/ErrorHandling.h"
+#include <llvm/Support/MemoryBuffer.h>
+
+#include <optional>
+
 namespace klee {
+std::unique_ptr<llvm::MemoryBuffer>
+klee_open_input_file(const std::string &path, std::string &error);
+
 std::unique_ptr<llvm::raw_fd_ostream>
 klee_open_output_file(const std::string &path, std::string &error);
 
 #ifdef HAVE_ZLIB_H
 std::unique_ptr<llvm::raw_ostream>
 klee_open_compressed_output_file(const std::string &path, std::string &error);
+
+// Provides templated write method, so we inline the implementation.
+class BufferedTypedOstream {
+  std::unique_ptr<llvm::raw_ostream> stream;
+
+public:
+  BufferedTypedOstream(std::unique_ptr<llvm::raw_ostream> _stream)
+      : stream(std::move(_stream)) {}
+
+  template <typename T> void write(const T &value) {
+    stream->write(reinterpret_cast<const char *>(&value), sizeof(T));
+  }
+};
+
+// Provides templated read method, so we inline the implementation.
+class BufferedTypedIstream {
+  std::unique_ptr<compressed_fd_istream> stream;
+  char internal_buffer[DECOMPRESSED_BUFSIZE];
+  size_t buffer_size;
+  size_t buffer_pos;
+
+public:
+  BufferedTypedIstream(std::unique_ptr<compressed_fd_istream> _stream)
+      : stream(std::move(_stream)), buffer_size(0), buffer_pos(0) {}
+
+  template <typename T> std::optional<T> next() {
+    T value;
+    size_t bytes_needed = sizeof(T);
+    size_t bytes_read = 0;
+    char *value_ptr = reinterpret_cast<char *>(&value);
+
+    while (bytes_read < bytes_needed) {
+      if (buffer_pos >= buffer_size) {
+        if (eof()) {
+          if (bytes_read == 0) {
+            return std::nullopt;
+          } else {
+            klee_error("Unexpected EOF while reading object");
+          }
+        }
+        buffer_size = stream->read_bytes(internal_buffer, DECOMPRESSED_BUFSIZE);
+        buffer_pos = 0;
+        if (buffer_size == 0) {
+          if (bytes_read == 0) {
+            return std::nullopt;
+          } else {
+            klee_error("Unexpected EOF while reading object");
+          }
+        }
+      }
+
+      const size_t bytes_available = buffer_size - buffer_pos;
+      const size_t bytes_to_copy =
+          std::min(bytes_needed - bytes_read, bytes_available);
+
+      std::memcpy(value_ptr + bytes_read, internal_buffer + buffer_pos,
+                  bytes_to_copy);
+
+      buffer_pos += bytes_to_copy;
+      bytes_read += bytes_to_copy;
+    }
+
+    return value;
+  }
+
+  bool eof() const { return stream->eof(); }
+};
+
+std::unique_ptr<BufferedTypedOstream>
+klee_open_buffered_typed_output_file(const std::string &path,
+                                     std::string &error);
+
+std::unique_ptr<BufferedTypedIstream>
+klee_open_buffered_typed_input_file(const std::string &path,
+                                    std::string &error);
+
 #endif
 } // namespace klee
 

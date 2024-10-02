@@ -41,6 +41,32 @@ public:
 
   ~compressed_fd_ostream();
 };
-}
+
+constexpr size_t COMPRESSED_BUFSIZE = BUFSIZE;
+constexpr size_t DECOMPRESSED_BUFSIZE = BUFSIZE;
+
+class compressed_fd_istream {
+  int FD;
+  uint8_t compressed_buffer[COMPRESSED_BUFSIZE];
+  uint8_t decompressed_buffer[DECOMPRESSED_BUFSIZE];
+  size_t decompressed_size;
+  size_t decompressed_pos;
+  z_stream strm;
+  bool eof_reached;
+
+  void init_zlib();
+  void cleanup_zlib();
+  void fill_decompressed_buffer();
+
+public:
+  compressed_fd_istream(const std::string &Filename);
+  ~compressed_fd_istream();
+
+  size_t read_bytes(char *buffer, size_t size);
+
+  bool eof() const;
+};
+
+} // namespace klee
 
 #endif /* KLEE_COMPRESSIONSTREAM_H */
