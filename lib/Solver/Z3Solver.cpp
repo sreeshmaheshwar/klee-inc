@@ -116,7 +116,7 @@ public:
     return assertionStack;
   }
   // Constituent solvers relay query based on pool-computed LCP for efficiency.
-  bool popAndAssertRemaining(int framesToPop, const Query &query,
+  bool popAndAssertRemaining(int framesToKeep, const Query &query,
                              const std::vector<const Array *> *objects,
                              std::vector<std::vector<unsigned char>> *values,
                              bool &hasSolution);
@@ -402,11 +402,11 @@ bool Z3SolverImpl::internalRunSolver(
   return processIncrementalResponse(objects, values, hasSolution);
 }
 
-bool Z3SolverImpl::popAndAssertRemaining(int framesToPop, const Query &query,
+bool Z3SolverImpl::popAndAssertRemaining(int framesToKeep, const Query &query,
                                         const std::vector<const Array *> *objects,
                                         std::vector<std::vector<unsigned char>> *values,
                                         bool &hasSolution) {
-  popFrames(framesToPop);
+  popFrames(int(assertionStack.size()) - framesToKeep);
 
   ExprHashSet inStack(assertionStack.begin(), assertionStack.end());
 
