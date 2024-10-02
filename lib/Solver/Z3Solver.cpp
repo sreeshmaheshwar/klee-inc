@@ -27,7 +27,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <algorithm> // std::find_i, std::min_element
+#include <algorithm> // std::find_if, std::min_element
 #include <iterator> // std::distance
 #include <memory>
 #include <unordered_set>
@@ -83,7 +83,7 @@ private:
   // Constant arrays whose assertions have been relayed on assertion stack:
   std::unordered_set<const Array *> carraysInStack;
   // Constant arrays whose assertions have been relayed in each frame:
-  std::vector<std::vector<const Array *>> carraysInFrame;
+  std::vector<std::vector<const Array *>> carraysInFrame; // Map also possible.
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
