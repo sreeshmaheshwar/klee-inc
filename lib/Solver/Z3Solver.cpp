@@ -27,6 +27,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <algorithm> // std::find_i, std::min_element
 #include <iterator> // std::distance
 #include <memory>
 
@@ -56,6 +57,16 @@ llvm::cl::opt<unsigned>
 llvm::cl::opt<unsigned>
     Z3IncTimeout("inc-timeout", llvm::cl::init(0),
                      llvm::cl::desc("Timeout in ms for Z3 Solver2 to delegate to Solver1, 0 to disable (default=0)"),
+                     llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<unsigned>
+    Z3PoolSize("pool-size", llvm::cl::init(5),
+                     llvm::cl::desc("Number of Z3 solvers in the pool (default=5)"),
+                     llvm::cl::cat(klee::SolvingCat));
+
+llvm::cl::opt<bool>
+    Z3WarnDelegation("warn-delegation", llvm::cl::init(false),
+                     llvm::cl::desc("Debug Z3 pool delegation through warnings (default=false)"),
                      llvm::cl::cat(klee::SolvingCat));
 }
 
@@ -89,9 +100,24 @@ private:
   void popFrames(size_t frames);
   void assertConstantArrays(const ref<Expr> &e);
 
+  bool
+  processIncrementalResponse(const std::vector<const Array *> *objects,
+                             std::vector<std::vector<unsigned char>> *values,
+                             bool &hasSolution);
+
 public:
   Z3SolverImpl();
   ~Z3SolverImpl();
+
+  // Constituent solvers expose read-only assertion stacks to pool.
+  const ConstraintSet::constraints_ty &getStack() const {
+    return assertionStack;
+  }
+  // Constituent solvers relay query based on pool-computed LCP for efficiency.
+  bool popAndAssertRemaining(int framesToPop, const Query &query,
+                             const std::vector<const Array *> *objects,
+                             std::vector<std::vector<unsigned char>> *values,
+                             bool &hasSolution);
 
   std::string getConstraintLog(const Query &) override;
   void setCoreSolverTimeout(time::Span _timeout) {
@@ -165,16 +191,6 @@ Z3SolverImpl::Z3SolverImpl()
 Z3SolverImpl::~Z3SolverImpl() {
   Z3_solver_dec_ref(builder->ctx, z3Solver);
   Z3_params_dec_ref(builder->ctx, solverParameters);
-}
-
-Z3Solver::Z3Solver() : Solver(std::make_unique<Z3SolverImpl>()) {}
-
-std::string Z3Solver::getConstraintLog(const Query &query) {
-  return impl->getConstraintLog(query);
-}
-
-void Z3Solver::setCoreSolverTimeout(time::Span timeout) {
-  impl->setCoreSolverTimeout(timeout);
 }
 
 std::string Z3SolverImpl::getConstraintLog(const Query &query) {
@@ -311,35 +327,9 @@ void Z3SolverImpl::assertConstantArrays(const ref<Expr> &e) {
   }
 }
 
-bool Z3SolverImpl::internalRunSolver(
-    const Query &query, const std::vector<const Array *> *objects,
+bool Z3SolverImpl::processIncrementalResponse(
+    const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
-  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
-  TimerStatIncrementer t(stats::queryTime);
-
-  QueryWriter writer(query);
-  auto stack_it = assertionStack.begin();
-
-  // LCP between the assertion stack (i.e. previous query) and query.
-  while (stack_it != assertionStack.end() && !writer.done() &&
-         (*stack_it)->hash() == writer.next()->hash()) {
-    ++stack_it;
-    writer.advance();
-  }
-
-  // Pop off all constraints not in LCP.
-  popFrames(std::distance(stack_it, assertionStack.end()));
-
-  // Push the remaining constraints of the current query.
-  while (!writer.done()) {
-    Z3_solver_push(builder->ctx, z3Solver);
-    const auto &e = writer.next();
-    assertionStack.push_back(e);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
-    assertConstantArrays(e);
-    writer.advance();
-  }
-
   ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
@@ -376,6 +366,59 @@ bool Z3SolverImpl::internalRunSolver(
     raise(SIGINT);
   }
   return false; // failed
+}
+
+bool Z3SolverImpl::internalRunSolver(
+    const Query &query, const std::vector<const Array *> *objects,
+    std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
+  runStatusCode = SOLVER_RUN_STATUS_FAILURE;
+  TimerStatIncrementer t(stats::queryTime);
+
+  QueryWriter writer(query);
+  auto stack_it = assertionStack.begin();
+
+  // LCP between the assertion stack (i.e. previous query) and query.
+  while (stack_it != assertionStack.end() && !writer.done() &&
+         (*stack_it)->hash() == writer.next()->hash()) {
+    ++stack_it;
+    writer.advance();
+  }
+
+  // Pop off all constraints not in LCP.
+  popFrames(std::distance(stack_it, assertionStack.end()));
+
+  // Push the remaining constraints of the current query.
+  while (!writer.done()) {
+    Z3_solver_push(builder->ctx, z3Solver);
+    const auto &e = writer.next();
+    assertionStack.push_back(e);
+    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
+    assertConstantArrays(e);
+    writer.advance();
+  }
+
+  return processIncrementalResponse(objects, values, hasSolution);
+}
+
+bool Z3SolverImpl::popAndAssertRemaining(int framesToPop, const Query &query,
+                                        const std::vector<const Array *> *objects,
+                                        std::vector<std::vector<unsigned char>> *values,
+                                        bool &hasSolution) {
+  popFrames(framesToPop);
+
+  ExprHashSet inStack(assertionStack.begin(), assertionStack.end());
+
+  for (QueryWriter writer(query); !writer.done(); writer.advance()) {
+    const auto& e = writer.next();
+    if (inStack.insert(e).second) {
+      Z3_solver_push(builder->ctx, z3Solver);
+      assertionStack.push_back(e);
+      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
+      assertConstantArrays(e);
+    }
+  }
+
+  return processIncrementalResponse(objects, values, hasSolution);
 }
 
 SolverImpl::SolverRunStatus Z3SolverImpl::handleSolverResponse(
@@ -515,6 +558,142 @@ bool Z3SolverImpl::validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel)
 
 SolverImpl::SolverRunStatus Z3SolverImpl::getOperationStatusCode() {
   return runStatusCode;
+}
+
+class Z3PoolingSolverImpl : public SolverImpl {
+  private:
+    std::vector<std::unique_ptr<Z3SolverImpl>> pool;
+    std::vector<int> lastUsed;
+    int previousId;
+    int count;
+
+    bool internalRunSolver(const Query &,
+                            const std::vector<const Array *> *objects,
+                            std::vector<std::vector<unsigned char> > *values,
+                            bool &hasSolution);
+
+  public:
+    Z3PoolingSolverImpl();
+    ~Z3PoolingSolverImpl() = default; // Destroys pool.
+
+    std::string getConstraintLog(const Query &) override;
+    void setCoreSolverTimeout(time::Span);
+
+    bool computeTruth(const Query &, bool &isValid) override;
+    bool computeValue(const Query &, ref<Expr> &result) override;
+    bool computeInitialValues(const Query &,
+                                const std::vector<const Array *> &objects,
+                                std::vector<std::vector<unsigned char> > &values,
+                                bool &hasSolution) override;
+
+    SolverRunStatus getOperationStatusCode() override;
+};
+
+Z3PoolingSolverImpl::Z3PoolingSolverImpl() : lastUsed(Z3PoolSize, 0), previousId(0), count(0) {
+  if (Z3PoolSize < 1) {
+    klee_error("Pool size must be at least 1");
+  }
+  for (auto i = 0u; i < Z3PoolSize; ++i) {
+    pool.push_back(std::make_unique<Z3SolverImpl>());
+  }
+}
+
+bool Z3PoolingSolverImpl::computeTruth(const Query &query, bool &isValid) {
+  bool hasSolution = false; // to remove compiler warning
+  bool status =
+      internalRunSolver(query, /*objects=*/NULL, /*values=*/NULL, hasSolution);
+  isValid = !hasSolution;
+  return status;
+}
+
+bool Z3PoolingSolverImpl::computeValue(const Query &query, ref<Expr> &result) {
+  std::vector<const Array *> objects;
+  std::vector<std::vector<unsigned char> > values;
+  bool hasSolution;
+
+  // Find the object used in the expression, and compute an assignment
+  // for them.
+  findSymbolicObjects(query.expr, objects);
+  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
+    return false;
+  assert(hasSolution && "state has invalid constraint set");
+
+  // Evaluate the expression with the computed assignment.
+  Assignment a(objects, values);
+  result = a.evaluate(query.expr);
+
+  return true;
+}
+
+bool Z3PoolingSolverImpl::computeInitialValues(
+    const Query &query, const std::vector<const Array *> &objects,
+    std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
+  return internalRunSolver(query, &objects, &values, hasSolution);
+}
+
+bool Z3PoolingSolverImpl::internalRunSolver(
+    const Query &query, const std::vector<const Array *> *objects,
+    std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
+  ExprHashSet queryExpressions;
+  // Insert all to-be-asserted constraints into set.
+  for (QueryWriter writer(query); !writer.done(); writer.advance()) {
+    queryExpressions.insert(writer.next());
+  }
+
+  int bestId = -1, maxLCP = 0;
+  for (size_t id = 0; id < Z3PoolSize; ++id) {
+    const auto &stk = pool[id]->getStack();
+    int commonPrefixLength = std::distance(
+        stk.begin(), std::find_if(stk.begin(), stk.end(),
+                                  [&queryExpressions](const auto &expr) {
+                                    return !queryExpressions.count(expr);
+                                  }));
+    if (commonPrefixLength > maxLCP) {
+      maxLCP = commonPrefixLength;
+      bestId = id;
+    }
+  }
+
+  // If no solver has a common prefix, evict one using LRU.
+  if (bestId < 0) {
+    bestId = std::distance(lastUsed.begin(),
+                           std::min_element(lastUsed.begin(), lastUsed.end()));
+    if (Z3WarnDelegation)
+      klee_warning("Evicting solver %d", bestId);
+  }
+
+  lastUsed[bestId] = ++count;
+  previousId = bestId;
+  if (Z3WarnDelegation)
+    klee_warning("Using solver %d", bestId);
+
+  // No need to recompute LCP, so delegate to a new method, passing in LCP length.
+  return pool[bestId]->popAndAssertRemaining(maxLCP, query, objects, values,
+                                             hasSolution);
+}
+
+std::string Z3PoolingSolverImpl::getConstraintLog(const Query &query) {
+  return pool[previousId]->getConstraintLog(query); // Can delegate to any solver.
+}
+
+void Z3PoolingSolverImpl::setCoreSolverTimeout(time::Span timeout) {
+  for (auto i = 0u; i < Z3PoolSize; ++i) {
+    pool[i]->setCoreSolverTimeout(timeout);
+  }
+}
+
+SolverImpl::SolverRunStatus Z3PoolingSolverImpl::getOperationStatusCode() {
+  return pool[previousId]->getOperationStatusCode();
+}
+
+Z3Solver::Z3Solver() : Solver(std::make_unique<Z3PoolingSolverImpl>()) {}
+
+std::string Z3Solver::getConstraintLog(const Query &query) {
+  return impl->getConstraintLog(query);
+}
+
+void Z3Solver::setCoreSolverTimeout(time::Span timeout) {
+  impl->setCoreSolverTimeout(timeout);
 }
 }
 #endif // ENABLE_Z3
