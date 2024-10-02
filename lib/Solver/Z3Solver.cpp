@@ -87,7 +87,7 @@ private:
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
 
   void popFrames(size_t frames);
-  void assertConstantArrays(const ref<Expr> &e);
+  void pushConstraint(const ref<Expr> &e);
 
 public:
   Z3SolverImpl();
@@ -277,7 +277,11 @@ void Z3SolverImpl::popFrames(size_t frames) {
   }
 }
 
-void Z3SolverImpl::assertConstantArrays(const ref<Expr> &e) {
+void Z3SolverImpl::pushConstraint(const ref<Expr> &e) {
+  Z3_solver_push(builder->ctx, z3Solver);
+  assertionStack.push_back(e);
+  Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
+
   // Note that constant arrays are delicate. We do not want to assert
   // all (potentially large and duplicated) constant arrays for every
   // expression separately, but we can't leave this as it was before
@@ -331,51 +335,11 @@ bool Z3SolverImpl::internalRunSolver(
   popFrames(std::distance(stack_it, assertionStack.end()));
 
   // Push the remaining constraints of the current query.
-  while (!writer.done()) {
-    Z3_solver_push(builder->ctx, z3Solver);
-    const auto &e = writer.next();
-    assertionStack.push_back(e);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
-    assertConstantArrays(e);
-    writer.advance();
+  for (; !writer.done(); writer.advance()) {
+    pushConstraint(writer.next());
   }
 
-  ++stats::solverQueries;
-  if (objects)
-    ++stats::queryCounterexamples;
-
-  if (dumpedQueriesFile) {
-    *dumpedQueriesFile << "; start Z3 query\n";
-    *dumpedQueriesFile << Z3_solver_to_string(builder->ctx, z3Solver);
-    *dumpedQueriesFile << "(check-sat)\n";
-    *dumpedQueriesFile << "(reset)\n";
-    *dumpedQueriesFile << "; end Z3 query\n\n";
-    dumpedQueriesFile->flush();
-  }
-
-  ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, z3Solver);
-  runStatusCode = handleSolverResponse(z3Solver, satisfiable, objects, values,
-                                       hasSolution);
-
-  // Clear the builder's cache to prevent memory usage exploding.
-  // By using ``autoClearConstructCache=false`` and clearning now
-  // we allow Z3_ast expressions to be shared from an entire
-  // ``Query`` rather than only sharing within a single call to
-  // ``builder->construct()``.
-  builder->clearConstructCache();
-  if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
-      runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
-    if (hasSolution) {
-      ++stats::queriesInvalid;
-    } else {
-      ++stats::queriesValid;
-    }
-    return true; // success
-  }
-  if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_INTERRUPTED) {
-    raise(SIGINT);
-  }
-  return false; // failed
+  return processIncrementalResponse(objects, values, hasSolution);
 }
 
 SolverImpl::SolverRunStatus Z3SolverImpl::handleSolverResponse(
