@@ -98,7 +98,7 @@ private:
   bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
 
   void popFrames(size_t frames);
-  void assertConstantArrays(const ref<Expr> &e);
+  void pushConstraint(const ref<Expr> &e);
 
   bool
   processIncrementalResponse(const std::vector<const Array *> *objects,
@@ -293,7 +293,11 @@ void Z3SolverImpl::popFrames(size_t frames) {
   }
 }
 
-void Z3SolverImpl::assertConstantArrays(const ref<Expr> &e) {
+void Z3SolverImpl::pushConstraint(const ref<Expr> &e) {
+  Z3_solver_push(builder->ctx, z3Solver);
+  assertionStack.push_back(e);
+  Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
+
   // Note that constant arrays are delicate. We do not want to assert
   // all (potentially large and duplicated) constant arrays for every
   // expression separately, but we can't leave this as it was before
@@ -388,13 +392,8 @@ bool Z3SolverImpl::internalRunSolver(
   popFrames(std::distance(stack_it, assertionStack.end()));
 
   // Push the remaining constraints of the current query.
-  while (!writer.done()) {
-    Z3_solver_push(builder->ctx, z3Solver);
-    const auto &e = writer.next();
-    assertionStack.push_back(e);
-    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
-    assertConstantArrays(e);
-    writer.advance();
+  for (; !writer.done(); writer.advance()) {
+    pushConstraint(writer.next());
   }
 
   return processIncrementalResponse(objects, values, hasSolution);
