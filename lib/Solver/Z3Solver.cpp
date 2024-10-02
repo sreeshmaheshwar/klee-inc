@@ -408,12 +408,9 @@ bool Z3SolverImpl::popAndAssertRemaining(int framesToPop, const Query &query,
   ExprHashSet inStack(assertionStack.begin(), assertionStack.end());
 
   for (QueryWriter writer(query); !writer.done(); writer.advance()) {
-    const auto& e = writer.next();
+    const auto &e = writer.next();
     if (inStack.insert(e).second) {
-      Z3_solver_push(builder->ctx, z3Solver);
-      assertionStack.push_back(e);
-      Z3_solver_assert(builder->ctx, z3Solver, builder->construct(e));
-      assertConstantArrays(e);
+      pushConstraint(e);
     }
   }
 
