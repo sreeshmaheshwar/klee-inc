@@ -70,8 +70,8 @@ llvm::cl::opt<std::string> CoreDumpFile(
     llvm::cl::cat(klee::SolvingCat));
 
 llvm::cl::opt<unsigned>
-    CSATimeout("csa-timeout", llvm::cl::init(70),
-                     llvm::cl::desc("CSA timeout (in milliseconds) - set 0 to disable (default=70)"),
+    CSATimeout("csa-timeout", llvm::cl::init(200),
+                     llvm::cl::desc("CSA timeout (in milliseconds) - set 0 to disable (default=200)"),
                      llvm::cl::cat(klee::SolvingCat));
 
 }
