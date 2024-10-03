@@ -434,6 +434,21 @@ cl::opt<std::string> TermReplayOutputFile(
              "(default=\"\")"),
     cl::init(""),
     cl::cat(SearchCat));
+/*** Termination Replaying Options ***/
+
+cl::opt<std::string> TermReplayInputFile(
+    "tr-input",
+    cl::desc("File to read state termiantion replay from. Disable with \"\""
+             "(default=\"\")"),
+    cl::init(""),
+    cl::cat(SearchCat));
+
+cl::opt<std::string> TermReplayOutputFile(
+    "tr-output",
+    cl::desc("File to write state termiantion replay to. Disable with \"\""
+             "(default=\"\")"),
+    cl::init(""),
+    cl::cat(SearchCat));
 
 /*** Debugging options ***/
 

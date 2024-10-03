@@ -1,4 +1,4 @@
-//===-- Z3Solver.cpp -------------------------------------------*- C++ -*-====//
+//===-- Z3GlobalSolver.cpp -------------------------------------------*- C++ -*-====//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -16,9 +16,8 @@
 
 #ifdef ENABLE_Z3
 
-#include "Z3Solver.h"
-#include "Z3Builder.h"
 #include "Z3GlobalSolver.h"
+#include "Z3Builder.h"
 
 #include "klee/Expr/Constraints.h"
 #include "klee/Expr/Assignment.h"
@@ -26,60 +25,47 @@
 #include "klee/Solver/Solver.h"
 #include "klee/Solver/SolverImpl.h"
 #include "klee/Solver/SolverCmdLine.h"
-#include "klee/Solver/SolverCmdLine.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "klee/System/Time.h"
-
-#include "klee/System/Time.h"
-
 #include <memory>
-
-namespace {
-llvm::cl::opt<std::string> CoreDumpFile(
-    "core-times", llvm::cl::init(""),
-    llvm::cl::desc("Print core solver times to this file"),
-    llvm::cl::cat(klee::SolvingCat));
-
-llvm::cl::opt<unsigned>
-    CSATimeout("csa-timeout", llvm::cl::init(70),
-                     llvm::cl::desc("CSA timeout (in milliseconds) (default=70)"),
-                     llvm::cl::cat(klee::SolvingCat));
-}
 
 #include "llvm/Support/ErrorHandling.h"
 
 namespace klee {
 
-class Z3SolverImpl : public SolverImpl {
+class Z3GlobalSolverImpl : public SolverImpl {
 private:
+  ConstraintSet assertionStack;
   Z3_solver z3Solver;
   std::unique_ptr<Z3Builder> builder;
   time::Span timeout;
   SolverRunStatus runStatusCode;
-  std::unique_ptr<Z3GlobalSolver> globalSolver;
   std::unique_ptr<llvm::raw_fd_ostream> dumpedQueriesFile;
-  std::unique_ptr<llvm::raw_fd_ostream> coreTimesFile;
   ::Z3_params solverParameters;
   // Parameter symbols
   ::Z3_symbol timeoutParamStrSymbol;
-  ::Z3_symbol s2TimeoutParamStrSymbol;
+
+  bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
+
+public:
+  Z3GlobalSolverImpl();
+  ~Z3GlobalSolverImpl();
 
   bool internalRunSolver(const Query &,
                          const std::vector<const Array *> *objects,
                          std::vector<std::vector<unsigned char> > *values,
                          bool &hasSolution);
-  bool validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel);
-
-public:
-  Z3SolverImpl();
-  ~Z3SolverImpl();
 
   std::string getConstraintLog(const Query &) override;
   void setCoreSolverTimeout(time::Span _timeout) {
+    timeout = _timeout;
+
+    auto timeoutInMilliSeconds = static_cast<unsigned>((timeout.toMicroseconds() / 1000));
+    if (!timeoutInMilliSeconds)
+      timeoutInMilliSeconds = UINT_MAX;
     Z3_params_set_uint(builder->ctx, solverParameters, timeoutParamStrSymbol,
-                       CSATimeout);
+                       timeoutInMilliSeconds);
   }
 
   bool computeTruth(const Query &, bool &isValid);
@@ -96,13 +82,13 @@ public:
   SolverRunStatus getOperationStatusCode();
 };
 
-Z3SolverImpl::Z3SolverImpl()
+Z3GlobalSolverImpl::Z3GlobalSolverImpl()
     : builder(new Z3Builder(
           /*autoClearConstructCache=*/false,
           /*z3LogInteractionFileArg=*/Z3LogInteractionFile.size() > 0
               ? Z3LogInteractionFile.c_str()
               : NULL)),
-      runStatusCode(SOLVER_RUN_STATUS_FAILURE), globalSolver(std::make_unique<Z3GlobalSolver>()) {
+      runStatusCode(SOLVER_RUN_STATUS_FAILURE) {
   assert(builder && "unable to create Z3Builder");
   solverParameters = Z3_mk_params(builder->ctx);
   Z3_params_inc_ref(builder->ctx, solverParameters);
@@ -119,17 +105,6 @@ Z3SolverImpl::Z3SolverImpl()
     klee_message("Dumping Z3 queries to \"%s\"", Z3QueryDumpFile.c_str());
   }
 
-  if (!CoreDumpFile.empty()) {
-    std::string error;
-    coreTimesFile = klee_open_output_file(CoreDumpFile, error);
-    if (!coreTimesFile) {
-      klee_error("Error creating file for dumping Z3 queries: %s",
-                 error.c_str());
-    }
-    klee_message("Dumping Z3 queries to \"%s\"", CoreDumpFile.c_str());
-    *coreTimesFile << "Instructions,Time" << "\n";
-  }
-
   // Set verbosity
   if (Z3VerbosityLevel > 0) {
     std::string underlyingString;
@@ -142,25 +117,31 @@ Z3SolverImpl::Z3SolverImpl()
   z3Solver = Z3_mk_solver(builder->ctx);
   Z3_solver_inc_ref(builder->ctx, z3Solver);
   Z3_solver_set_params(builder->ctx, z3Solver, solverParameters);
-  Z3_solver_push(builder->ctx, z3Solver);
 }
 
-Z3SolverImpl::~Z3SolverImpl() {
+Z3GlobalSolverImpl::~Z3GlobalSolverImpl() {
   Z3_solver_dec_ref(builder->ctx, z3Solver);
   Z3_params_dec_ref(builder->ctx, solverParameters);
 }
 
-Z3Solver::Z3Solver() : Solver(std::make_unique<Z3SolverImpl>()) {}
+Z3GlobalSolver::Z3GlobalSolver() : Solver(std::make_unique<Z3GlobalSolverImpl>()) {}
 
-std::string Z3Solver::getConstraintLog(const Query &query) {
+std::string Z3GlobalSolver::getConstraintLog(const Query &query) {
   return impl->getConstraintLog(query);
 }
 
-void Z3Solver::setCoreSolverTimeout(time::Span timeout) {
+void Z3GlobalSolver::setCoreSolverTimeout(time::Span timeout) {
   impl->setCoreSolverTimeout(timeout);
 }
 
-std::string Z3SolverImpl::getConstraintLog(const Query &query) {
+bool Z3GlobalSolver::internalRunSolver(const Query & query,
+                                       const std::vector<const Array *> *objects,
+                                       std::vector<std::vector<unsigned char> > *values,
+                                       bool &hasSolution) {
+  return static_cast<Z3GlobalSolverImpl *>(impl.get())->internalRunSolver(query, objects, values, hasSolution);
+}
+
+std::string Z3GlobalSolverImpl::getConstraintLog(const Query &query) {
   std::vector<Z3ASTHandle> assumptions;
   // We use a different builder here because we don't want to interfere
   // with the solver's builder because it may change the solver builder's
@@ -198,7 +179,7 @@ std::string Z3SolverImpl::getConstraintLog(const Query &query) {
                                         assumptions.cend()};
   ::Z3_string result = Z3_benchmark_to_smtlib_string(
       temp_builder.ctx,
-      /*name=*/"Emited by klee::Z3SolverImpl::getConstraintLog()",
+      /*name=*/"Emited by klee::Z3GlobalSolverImpl::getConstraintLog()",
       /*logic=*/"",
       /*status=*/"unknown",
       /*attributes=*/"",
@@ -216,7 +197,7 @@ std::string Z3SolverImpl::getConstraintLog(const Query &query) {
   return {result};
 }
 
-bool Z3SolverImpl::computeTruth(const Query &query, bool &isValid) {
+bool Z3GlobalSolverImpl::computeTruth(const Query &query, bool &isValid) {
   bool hasSolution = false; // to remove compiler warning
   bool status =
       internalRunSolver(query, /*objects=*/NULL, /*values=*/NULL, hasSolution);
@@ -224,7 +205,7 @@ bool Z3SolverImpl::computeTruth(const Query &query, bool &isValid) {
   return status;
 }
 
-bool Z3SolverImpl::computeValue(const Query &query, ref<Expr> &result) {
+bool Z3GlobalSolverImpl::computeValue(const Query &query, ref<Expr> &result) {
   std::vector<const Array *> objects;
   std::vector<std::vector<unsigned char> > values;
   bool hasSolution;
@@ -243,112 +224,72 @@ bool Z3SolverImpl::computeValue(const Query &query, ref<Expr> &result) {
   return true;
 }
 
-bool Z3SolverImpl::computeInitialValues(
+bool Z3GlobalSolverImpl::computeInitialValues(
     const Query &query, const std::vector<const Array *> &objects,
     std::vector<std::vector<unsigned char> > &values, bool &hasSolution) {
   return internalRunSolver(query, &objects, &values, hasSolution);
 }
 
-bool Z3SolverImpl::internalRunSolver(
+bool Z3GlobalSolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
   runStatusCode = SOLVER_RUN_STATUS_FAILURE;
   TimerStatIncrementer t(stats::queryTime);
-  auto startTime = time::getWallTime();
 
-  // Heuristic - every 1000 queries, clear solver state.
-  // We created a backtracking point to the empty solver state, via `push`,
-  // and continually return to it.
-  if (++stats::solverQueries % 1000 == 0) {
-    Z3_solver_pop(builder->ctx, z3Solver, 1);
-    Z3_solver_push(builder->ctx, z3Solver);
-    builder->assumptionLiteralCache.clear();
-    builder->constantArrayLiteralCache.clear();
-  }
+  Z3_solver_push(builder->ctx, z3Solver); 
 
-  std::vector<Z3ASTHandle> assumptions;
   ConstantArrayFinder constant_arrays_in_query;
-
-  // If the constraint already has an impliciation literal associated with it,
-  // add it to the assumption literals for the `check_sat_assuming` command.
-  // Otherwise, create a new impliciation literal (handled by the `Z3Builder`)
-  // `assert` the impliciation, then add it.
-  auto assertConstraint = [&](const ref<Expr> &constraint) -> void {
-    auto [assumption, implication] = builder->assumptionLiteral(constraint);
-    assumptions.push_back(assumption);
-    if (implication) {
-      Z3_solver_assert(builder->ctx, z3Solver, implication.value());
-    } else {
-      // klee_warning("Using existing assumption literal");
-    }
+  for (auto const &constraint : query.constraints) {
+    Z3_solver_assert(builder->ctx, z3Solver, builder->construct(constraint));
     constant_arrays_in_query.visit(constraint);
-  };
-
-  for (const auto &constraint : query.constraints) {
-    assertConstraint(constraint);
   }
-
-
+  ++stats::solverQueries;
   if (objects)
     ++stats::queryCounterexamples;
+
+  Z3ASTHandle z3QueryExpr =
+      Z3ASTHandle(builder->construct(query.expr), builder->ctx);
+  constant_arrays_in_query.visit(query.expr);
+
+  for (auto const &constant_array : constant_arrays_in_query.results) {
+    assert(builder->constant_array_assertions.count(constant_array) == 1 &&
+           "Constant array found in query, but not handled by Z3Builder");
+    for (auto const &arrayIndexValueExpr :
+         builder->constant_array_assertions[constant_array]) {
+      Z3_solver_assert(builder->ctx, z3Solver, arrayIndexValueExpr);
+    }
+  }
 
   // KLEE Queries are validity queries i.e.
   // ∀ X Constraints(X) → query(X)
   // but Z3 works in terms of satisfiability so instead we ask the
   // negation of the equivalent i.e.
   // ∃ X Constraints(X) ∧ ¬ query(X)
-  auto negatedExpr = Expr::createIsZero(query.expr);
-  assertConstraint(negatedExpr);
-
-  for (auto const &a : constant_arrays_in_query.results) {
-    assumptions.push_back(builder->assumptionLiteralConstArray(a, [&](const Z3ASTHandle& e) -> void {
-      Z3_solver_assert(builder->ctx, z3Solver, e);
-    }));
-  }
+  Z3_solver_assert(
+      builder->ctx, z3Solver,
+      Z3ASTHandle(Z3_mk_not(builder->ctx, z3QueryExpr), builder->ctx));
 
   if (dumpedQueriesFile) {
     *dumpedQueriesFile << "; start Z3 query\n";
     *dumpedQueriesFile << Z3_solver_to_string(builder->ctx, z3Solver);
     *dumpedQueriesFile << "(check-sat)\n";
     *dumpedQueriesFile << "(reset)\n";
-    *dumpedQueriesFile << "; end Z3 query\n";
-    *dumpedQueriesFile << "; " << assumptions.size() << " assumptions used\n";
+    *dumpedQueriesFile << "; end Z3 query\n\n";
     dumpedQueriesFile->flush();
   }
 
-  std::vector<::Z3_ast> raw_assumptions{assumptions.cbegin(),
-                                        assumptions.cend()};
-  // (check-sat-assuming):
-  ::Z3_lbool satisfiable = Z3_solver_check_assumptions(
-    builder->ctx,
-    z3Solver,
-    /*num_assumptions=*/raw_assumptions.size(),
-    /*assumptions=*/raw_assumptions.size() ? raw_assumptions.data() : nullptr);
-  
+  ::Z3_lbool satisfiable = Z3_solver_check(builder->ctx, z3Solver);
   runStatusCode = handleSolverResponse(z3Solver, satisfiable, objects, values,
                                        hasSolution);
-
-  if (coreTimesFile) {
-    auto lastQueryDuration = time::getWallTime() - startTime;
-
-    Statistic *S = theStatisticManager->getStatisticByName("Instructions");
-    uint64_t instructions = S ? S->getValue() : 0;
-
-    *coreTimesFile << instructions << "," << lastQueryDuration.toMicroseconds() << "\n";
-  }
 
   // Clear the builder's cache to prevent memory usage exploding.
   // By using ``autoClearConstructCache=false`` and clearning now
   // we allow Z3_ast expressions to be shared from an entire
   // ``Query`` rather than only sharing within a single call to
   // ``builder->construct()``.
-  builder->clearConstructCache(); // Doesn't clear the constant array assertions.
+  builder->clearConstructCache();
 
-  if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_TIMEOUT) {
-    bool ret = globalSolver->internalRunSolver(query, objects, values, hasSolution);
-    runStatusCode = globalSolver->impl->getOperationStatusCode();
-    return ret;
-  }
+  Z3_solver_pop(builder->ctx, z3Solver, 1);
 
   if (runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_SOLVABLE ||
       runStatusCode == SolverImpl::SOLVER_RUN_STATUS_SUCCESS_UNSOLVABLE) {
@@ -365,7 +306,7 @@ bool Z3SolverImpl::internalRunSolver(
   return false; // failed
 }
 
-SolverImpl::SolverRunStatus Z3SolverImpl::handleSolverResponse(
+SolverImpl::SolverRunStatus Z3GlobalSolverImpl::handleSolverResponse(
     ::Z3_solver theSolver, ::Z3_lbool satisfiable,
     const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char> > *values, bool &hasSolution) {
@@ -451,7 +392,7 @@ SolverImpl::SolverRunStatus Z3SolverImpl::handleSolverResponse(
   }
 }
 
-bool Z3SolverImpl::validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel) {
+bool Z3GlobalSolverImpl::validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel) {
   bool success = true;
   ::Z3_ast_vector constraints =
       Z3_solver_get_assertions(builder->ctx, theSolver);
@@ -500,7 +441,7 @@ bool Z3SolverImpl::validateZ3Model(::Z3_solver &theSolver, ::Z3_model &theModel)
   return success;
 }
 
-SolverImpl::SolverRunStatus Z3SolverImpl::getOperationStatusCode() {
+SolverImpl::SolverRunStatus Z3GlobalSolverImpl::getOperationStatusCode() {
   return runStatusCode;
 }
 }
