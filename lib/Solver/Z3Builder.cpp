@@ -102,13 +102,20 @@ Z3Builder::~Z3Builder() {
   // Clear caches so exprs/sorts gets freed before the destroying context
   // they aren associated with.
   clearConstructCache();
+  assumptionLiteralCache.clear();
   _arr_hash.clear();
   constant_array_assertions.clear();
+  constantArrayLiteralCache.clear();
   Z3_del_context(ctx);
   if (z3LogInteractionFile.length() > 0) {
     Z3_close_log();
     Z3InterationLogOpen = false;
   }
+}
+
+Z3SortHandle Z3Builder::getBoolSort() {
+  // FIXME: store this
+  return Z3SortHandle(Z3_mk_bool_sort(ctx), ctx);
 }
 
 Z3SortHandle Z3Builder::getBvSort(unsigned width) {
@@ -120,6 +127,18 @@ Z3SortHandle Z3Builder::getArraySort(Z3SortHandle domainSort,
                                      Z3SortHandle rangeSort) {
   // FIXME: cache these
   return Z3SortHandle(Z3_mk_array_sort(ctx, domainSort, rangeSort), ctx);
+}
+
+Z3ASTHandle Z3Builder::newAssumptionLiteral() {
+  static unsigned id = 0;
+  std::string unique_id = llvm::utostr(id++);
+  // Note: We add an underscore afterwards to differentiate it from any
+  // array name that ends with a number. We still use a counter, just like
+  // array names do, to avoid any potential name clashes among implication
+  // literals. 
+  std::string unique_name = "alit_" + unique_id + "_";
+  Z3_symbol name = Z3_mk_string_symbol(ctx, unique_name.c_str());
+  return Z3ASTHandle(Z3_mk_const(ctx, name, getBoolSort()), ctx);
 }
 
 Z3ASTHandle Z3Builder::buildArray(const char *name, unsigned indexWidth,
@@ -346,6 +365,10 @@ Z3ASTHandle Z3Builder::iteExpr(Z3ASTHandle condition, Z3ASTHandle whenTrue,
   return Z3ASTHandle(Z3_mk_ite(ctx, condition, whenTrue, whenFalse), ctx);
 }
 
+Z3ASTHandle Z3Builder::impliesExpr(Z3ASTHandle lhs, Z3ASTHandle rhs) {
+  return Z3ASTHandle(Z3_mk_implies(ctx, lhs, rhs), ctx);
+}
+
 unsigned Z3Builder::getBVLength(Z3ASTHandle expr) {
   return Z3_get_bv_sort_size(ctx, Z3SortHandle(Z3_get_sort(ctx, expr), ctx));
 }
@@ -455,6 +478,39 @@ Z3ASTHandle Z3Builder::getArrayForUpdate(const Array *root,
   }
 
   return un_expr;
+}
+
+std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> Z3Builder::assumptionLiteral(ref<Expr> e) {
+  auto it = assumptionLiteralCache.find(e);
+  if (it != assumptionLiteralCache.end()) {
+    // Implication already asserted.
+    return {Z3ASTHandle(it->second, ctx), std::nullopt};
+  }
+  Z3ASTHandle literal = Z3ASTHandle(newAssumptionLiteral(), ctx);
+  assumptionLiteralCache[e] = literal;
+  Z3ASTHandle implication = impliesExpr(literal, construct(e));
+  return {literal, std::optional<Z3ASTHandle>{implication}};
+}
+
+Z3ASTHandle Z3Builder::assumptionLiteralConstArray(const Array* a, std::function<void(const Z3ASTHandle& e)> assertFun) {
+  auto it = constantArrayLiteralCache.find(a);
+  if (it != constantArrayLiteralCache.end()) {
+    // Implication already asserted.
+    return Z3ASTHandle(it->second);
+  }
+
+  Z3ASTHandle literal = Z3ASTHandle(newAssumptionLiteral(), ctx);
+  constantArrayLiteralCache[a] = literal;
+
+  assert(constant_array_assertions.count(a) == 1 &&
+         "Constant array found in query, but not handled by Z3Builder");
+
+  for (const auto& indexValE : constant_array_assertions[a]) {
+    // Bind all index-value expressions to the same assumption literal.
+    assertFun(impliesExpr(literal, indexValE));
+  }
+
+  return literal;
 }
 
 /** if *width_out!=1 then result is a bitvector,

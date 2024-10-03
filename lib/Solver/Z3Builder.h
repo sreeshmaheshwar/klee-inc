@@ -14,7 +14,10 @@
 #include "klee/Expr/ArrayExprHash.h"
 #include "klee/Expr/ExprHashMap.h"
 
+#include <optional>
+#include <utility>
 #include <unordered_map>
+#include <functional>
 #include <z3.h>
 
 namespace klee {
@@ -142,6 +145,9 @@ private:
   // ITE-expression constructor
   Z3ASTHandle iteExpr(Z3ASTHandle condition, Z3ASTHandle whenTrue,
                       Z3ASTHandle whenFalse);
+  
+  // Implies-expression constructor
+  Z3ASTHandle impliesExpr(Z3ASTHandle lhs, Z3ASTHandle rhs);
 
   // Bitvector length
   unsigned getBVLength(Z3ASTHandle expr);
@@ -161,11 +167,14 @@ private:
   Z3ASTHandle constructActual(ref<Expr> e, int *width_out);
   Z3ASTHandle construct(ref<Expr> e, int *width_out);
 
+  Z3ASTHandle newAssumptionLiteral();
   Z3ASTHandle buildArray(const char *name, unsigned indexWidth,
                          unsigned valueWidth);
 
+  Z3SortHandle getBoolSort();
   Z3SortHandle getBvSort(unsigned width);
   Z3SortHandle getArraySort(Z3SortHandle domainSort, Z3SortHandle rangeSort);
+
   bool autoClearConstructCache;
   std::string z3LogInteractionFile;
 
@@ -173,6 +182,8 @@ public:
   Z3_context ctx;
   std::unordered_map<const Array *, std::vector<Z3ASTHandle> >
       constant_array_assertions;
+  ExprHashMap<Z3ASTHandle> assumptionLiteralCache;
+  std::unordered_map<const Array*, Z3ASTHandle> constantArrayLiteralCache;
   Z3Builder(bool autoClearConstructCache, const char *z3LogInteractionFile);
   ~Z3Builder();
 
@@ -186,6 +197,12 @@ public:
       clearConstructCache();
     return res;
   }
+
+  // Returns the implication literal, together with the implication assertion if 
+  // the expression is unseen.
+  std::pair<Z3ASTHandle, std::optional<Z3ASTHandle>> assumptionLiteral(ref<Expr> e);
+
+  Z3ASTHandle assumptionLiteralConstArray(const Array* a, std::function<void(const Z3ASTHandle& e)> assertFun);
 
   void clearConstructCache() { constructed.clear(); }
 };
