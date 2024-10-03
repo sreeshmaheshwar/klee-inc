@@ -74,6 +74,11 @@ llvm::cl::opt<unsigned>
                      llvm::cl::desc("CSA timeout (in milliseconds), 0 to disable (default=200)"),
                      llvm::cl::cat(klee::SolvingCat));
 
+llvm::cl::opt<unsigned>
+    Z3Restart("restart-interval", llvm::cl::init(1000),
+                     llvm::cl::desc("Number of queries to solve before resetting the solver state (default=1000)"),
+                     llvm::cl::cat(klee::SolvingCat));
+
 }
 
 #include "llvm/Support/ErrorHandling.h"
@@ -574,12 +579,12 @@ bool Z3SolverImpl::internalRunSolver(
   TimerStatIncrementer t(stats::queryTime);
   auto startTime = time::getWallTime();
 
-  // Heuristic - every 1000 queries, clear solver state.
+  // Heuristic - every Z3Restart queries, clear solver state.
   // We created a backtracking point to the empty solver state, via `push`,
   // and continually return to it.
-  if (++stats::solverQueries % 1000 == 0) {
+  if (++stats::solverQueries % Z3Restart == 0) {
     Z3_solver_pop(builder->ctx, z3Solver, 1);
-    Z3_solver_push(builder->ctx, z3Solver);
+    Z3_solver_push(builder->ctx, z3Solver); // Backtracking point for next restart.
     builder->assumptionLiteralCache.clear();
     builder->constantArrayLiteralCache.clear();
   }
