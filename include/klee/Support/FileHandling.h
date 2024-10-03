@@ -26,7 +26,6 @@ DISABLE_WARNING_POP
 #include <optional>
 
 namespace klee {
-
 std::unique_ptr<llvm::MemoryBuffer>
 klee_open_input_file(const std::string &path, std::string &error);
 
