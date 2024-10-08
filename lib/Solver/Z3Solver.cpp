@@ -633,6 +633,7 @@ bool Z3PoolingSolverImpl::computeInitialValues(
 bool Z3PoolingSolverImpl::internalRunSolver(
     const Query &query, const std::vector<const Array *> *objects,
     std::vector<std::vector<unsigned char>> *values, bool &hasSolution) {
+  TimerStatIncrementer timer(stats::queryTime);
   ExprHashSet queryExpressions;
   // Insert all to-be-asserted constraints into set.
   for (QueryWriter writer(query); !writer.done(); writer.advance()) {
